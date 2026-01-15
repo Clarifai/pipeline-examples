@@ -1,0 +1,63 @@
+pipeline_step:
+  id: "model-version-train-ps"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "4000m"
+  cpu_memory: "16Gi"
+  num_accelerators: 1
+  accelerator_memory: "16Gi"
+  accelerator_type: ["NVIDIA-*"]
+  
+pipeline_step_input_params:
+  - name: user_id
+    description: "User ID"
+  - name: app_id
+    description: "App ID"
+  - name: model_id
+    description: "Model ID"
+  - name: dataset_id
+    description: "Dataset ID"
+  - name: num_classes
+    description: "Number of classes"
+  - name: num_epochs
+    description: "Total number of training epochs"
+  - name: batch_size
+    description: "Batch size for training"
+  - name: image_size
+    description: "Input image size (ResNet uses square images)"
+  - name: per_item_lrate
+    description: "Learning rate per item (overall LR = batch_size * num_gpus * per_item_lrate)"
+  - name: weight_decay
+    description: "Weight decay value"
+  - name: per_item_min_lrate
+    description: "Minimum learning rate per item at end of training"
+  - name: warmup_iters
+    description: "Number of warmup iterations"
+  - name: warmup_ratio
+    description: "Warmup learning rate multiplier"
+  - name: flip_probability
+    description: "Probability of random flip during training"
+  - name: flip_direction
+    description: "Flip direction (horizontal/vertical)"
+  - name: concepts_mutually_exclusive
+    description: "Whether concepts are mutually exclusive (single-label vs multi-label)"
+  - name: pretrained_weights
+    description: "Pretrained weights source (e.g., ImageNet-1k)"
+  - name: seed
+    description: "Random seed (-1 for no seed)"
+  - name: is_cpu
+    description: "Whether to use CPU (0=GPU, 1=CPU)"
+  - name: num_gpus
+    description: "Number of GPUs to use"
+  - name: model_type
+    description: "Model type (e.g., image-classification)"
+  - name: concepts
+    description: "List of class names as JSON array"
+
+

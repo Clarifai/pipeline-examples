@@ -1,0 +1,17 @@
+model:
+  id: object-detector-model
+  user_id: placeholder_user
+  app_id: placeholder_app
+  model_type_id: visual-detector
+build_info:
+  python_version: '3.10'
+inference_compute_info:
+  cpu_limit: '4'
+  cpu_memory: 8Gi
+  num_accelerators: 1
+  accelerator_type:
+  - NVIDIA-*
+  accelerator_memory: 3Gi
+concepts:
+- id: '0'
+  name: placeholder

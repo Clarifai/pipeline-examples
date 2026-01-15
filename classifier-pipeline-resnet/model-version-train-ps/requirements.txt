@@ -1,0 +1,11 @@
+clarifai==12.1.4
+clarifai-grpc==12.0.2
+boto3==1.42.4
+mmcv==2.2.0
+mmengine==0.10.7
+openmim==0.3.9
+mmpretrain==1.2.0
+scipy==1.16.3
+yapf==0.40.1
+Pillow==12.0.0
+pynvml==13.0.1

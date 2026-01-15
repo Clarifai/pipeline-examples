@@ -1,0 +1,7 @@
+clarifai==12.1.4
+clarifai-grpc==12.0.2
+boto3==1.42.4
+scipy==1.15.3
+yapf==0.40.1
+Pillow==12.0.0
+pynvml==13.0.1

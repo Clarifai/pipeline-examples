@@ -1,0 +1,102 @@
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  step_directories:
+    - model-version-train-ps
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: <YOUR_PIPELINE_ID>
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: model_id
+              value: "test_detector"
+            - name: dataset_id
+              value: "<YOUR_DATASET_ID>"
+            - name: seed
+              value: -1
+            - name: num_gpus
+              value: 1
+            - name: image_size
+              value: "[512]"
+            - name: max_aspect_ratio
+              value: 1.5
+            - name: keep_aspect_ratio
+              value: true
+            - name: batch_size
+              value: 16
+            - name: num_epochs
+              value: 100
+            - name: min_samples_per_epoch
+              value: 300
+            - name: per_item_lrate
+              value: 0.001875
+            - name: pretrained_weights
+              value: "coco"
+            - name: frozen_stages
+              value: 1
+            - name: inference_max_batch_size
+              value: 2
+            - name: is_cpu
+              value: 0
+            - name: model_type
+              value: "visual-detector"
+            - name: concepts
+              value: '["bird","cat"]'
+        templates:
+        - name: sequence
+          steps:
+          - - name: model-version-train-ps-name
+              templateRef:
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+              arguments:
+                parameters:
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: model_id
+                    value: "{{workflow.parameters.model_id}}"
+                  - name: dataset_id
+                    value: "{{workflow.parameters.dataset_id}}"
+                  - name: seed
+                    value: "{{workflow.parameters.seed}}"
+                  - name: num_gpus
+                    value: "{{workflow.parameters.num_gpus}}"
+                  - name: image_size
+                    value: "{{workflow.parameters.image_size}}"
+                  - name: max_aspect_ratio
+                    value: "{{workflow.parameters.max_aspect_ratio}}"
+                  - name: keep_aspect_ratio
+                    value: "{{workflow.parameters.keep_aspect_ratio}}"
+                  - name: batch_size
+                    value: "{{workflow.parameters.batch_size}}"
+                  - name: num_epochs
+                    value: "{{workflow.parameters.num_epochs}}"
+                  - name: min_samples_per_epoch
+                    value: "{{workflow.parameters.min_samples_per_epoch}}"
+                  - name: per_item_lrate
+                    value: "{{workflow.parameters.per_item_lrate}}"
+                  - name: pretrained_weights
+                    value: "{{workflow.parameters.pretrained_weights}}"
+                  - name: frozen_stages
+                    value: "{{workflow.parameters.frozen_stages}}"
+                  - name: inference_max_batch_size
+                    value: "{{workflow.parameters.inference_max_batch_size}}"
+                  - name: is_cpu
+                    value: "{{workflow.parameters.is_cpu}}"
+                  - name: model_type
+                    value: "{{workflow.parameters.model_type}}"
+                  - name: concepts
+                    value: "{{workflow.parameters.concepts}}"
+
