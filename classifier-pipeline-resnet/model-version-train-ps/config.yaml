@@ -55,8 +55,6 @@ pipeline_step_input_params:
     description: "Whether to use CPU (0=GPU, 1=CPU)"
   - name: num_gpus
     description: "Number of GPUs to use"
-  - name: model_type
-    description: "Model type (e.g., image-classification)"
   - name: concepts
     description: "List of class names as JSON array"
 

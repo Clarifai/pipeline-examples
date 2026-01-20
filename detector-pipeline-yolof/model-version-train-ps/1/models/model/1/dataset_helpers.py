@@ -13,7 +13,6 @@ def download_dataset(
     user_id: str,
     app_id: str,
     dataset_id: str,
-    model_type_id: str,
     pat: str,
     output_dir: str,
     eid: int = 0,

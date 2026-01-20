@@ -173,7 +173,6 @@ class MMDetectionYoloF(VisualDetectorClass):
               frozen_stages: int = 1,
               inference_max_batch_size: int = 2,
               is_cpu: int = 0,
-              model_type: str = "visual-detector",
               concepts: str = '["bird","cat"]'
               ) -> str:
         pat = os.getenv("CLARIFAI_PAT")
@@ -223,7 +222,6 @@ class MMDetectionYoloF(VisualDetectorClass):
             user_id=user_id,
             app_id=app_id,
             dataset_id=dataset_id,
-            model_type_id=model_type,
             pat=pat,
             output_dir=work_dir,
             concepts=concepts,

@@ -48,8 +48,6 @@ pipeline:
               value: 2
             - name: is_cpu
               value: 0
-            - name: model_type
-              value: "visual-detector"
             - name: concepts
               value: '["bird","cat"]'
         templates:
@@ -95,8 +93,6 @@ pipeline:
                     value: "{{workflow.parameters.inference_max_batch_size}}"
                   - name: is_cpu
                     value: "{{workflow.parameters.is_cpu}}"
-                  - name: model_type
-                    value: "{{workflow.parameters.model_type}}"
                   - name: concepts
                     value: "{{workflow.parameters.concepts}}"
 

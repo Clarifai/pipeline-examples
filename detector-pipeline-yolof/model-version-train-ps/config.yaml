@@ -49,8 +49,6 @@ pipeline_step_input_params:
     description: "Maximum batch size for inference benchmarking"
   - name: is_cpu
     description: "Whether to use CPU (0=GPU, 1=CPU)"
-  - name: model_type
-    description: "Model type (e.g., visual-detector)"
   - name: concepts
     description: "List of class names as JSON array"
 

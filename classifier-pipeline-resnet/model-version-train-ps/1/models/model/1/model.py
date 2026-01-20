@@ -193,7 +193,6 @@ class MMClassificationResNet50(VisualClassifierClass):
               seed: int = -1,
               is_cpu: int = 0,
               num_gpus: int = 1,
-              model_type: str = "image-classification",
               concepts: str = '["beignets","hamburger","prime_rib","ramen"]'
               ) -> str:
         # Get PAT from environment
@@ -245,7 +244,6 @@ class MMClassificationResNet50(VisualClassifierClass):
             user_id=user_id,
             app_id=app_id,
             dataset_id=dataset_id,
-            model_type_id=model_type,
             pat=pat,
             output_dir=work_dir,
             concepts=concepts,
