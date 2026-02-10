@@ -47,7 +47,6 @@
             "name": "dataset_id",
             "type": "STRING",
             "required": true,
-            "default_string": "<YOUR_DATASET_ID>",
             "description": "Clarifai dataset ID containing the training data",
             "constraints": {
                 "string_constraints": {
