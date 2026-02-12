@@ -3,8 +3,6 @@ import shutil
 import traceback
 import yaml
 from pathlib import Path
-from clarifai.client.artifact import Artifact
-from clarifai.client.artifact_version import ArtifactVersion
 
 try:
     from clarifai.utils.logging import logger
@@ -15,6 +13,9 @@ except ImportError:
 
 
 def upload_checkpoint_to_artifact(checkpoint_path, user_id, app_id, model_id):
+    from clarifai.client.artifact import Artifact
+    from clarifai.client.artifact_version import ArtifactVersion
+
     artifact_id = f"{model_id}_checkpoint"
     artifacts = Artifact().list(user_id=user_id, app_id=app_id)
     if not any(a.id == artifact_id for a in artifacts):
