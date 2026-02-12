@@ -1,4 +1,5 @@
 clarifai==12.1.4
+clarifai-protocol>=0.0.23,<0.0.36
 clarifai-grpc==12.0.2
 boto3==1.42.4
 mmcv==2.2.0

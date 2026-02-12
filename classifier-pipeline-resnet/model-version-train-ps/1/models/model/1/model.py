@@ -81,95 +81,6 @@ class MMClassificationResNet50(VisualClassifierClass):
 
         return parser
 
-    def to_pipeline(self, pipeline_folder_path):
-        step_name = "model-version-train-ps"
-        model_dir = Path(__file__).parent.parent
-        pipeline_path = Path(pipeline_folder_path)
-        step_path = pipeline_path / step_name
-
-        # Create directories
-        pipeline_path.mkdir(parents=True, exist_ok=True)
-        (step_path / "1").mkdir(parents=True, exist_ok=True)
-
-        # Get parameter info from train() method signature
-        sig = inspect.signature(self.train)
-        params_info = {}
-        for param_name, param in sig.parameters.items():
-            if param_name != 'self':
-                # Use default value if available, otherwise use empty string
-                if param.default != inspect.Parameter.empty:
-                    params_info[param_name] = param.default
-                else:
-                    params_info[param_name] = ""
-
-        # Generate parent config.yaml
-        with open(model_dir / "1" / "pipe_config.yaml") as f:
-            parent_config = f.read()
-
-        # Add parameters dynamically
-        param_lines = []
-        step_param_lines = []
-
-        for param_name, default_val in params_info.items():
-            # Format value based on type
-            if default_val == "":
-                val_str = '""'
-            elif isinstance(default_val, str):
-                val_str = f'"{default_val}"' if not default_val.startswith('[') else f"'{default_val}'"
-            elif isinstance(default_val, bool):
-                val_str = str(default_val).lower()
-            else:
-                val_str = str(default_val)
-
-            param_lines.append(f"            - name: {param_name}\n              value: {val_str}")
-            step_param_lines.append(f'                  - name: {param_name}\n                    value: "{{{{workflow.parameters.{param_name}}}}}"')
-
-        parent_config += "\n".join(param_lines)
-        parent_config += "\n        templates:\n        - name: sequence\n          steps:\n"
-        parent_config += f"          - - name: {step_name}-name\n"
-        parent_config += f"              templateRef:\n"
-        parent_config += f"                name: users/YOUR_USER_ID/apps/YOUR_APP_ID/pipeline_steps/{step_name}\n"
-        parent_config += f"                template: users/YOUR_USER_ID/apps/YOUR_APP_ID/pipeline_steps/{step_name}\n"
-        parent_config += "              arguments:\n                parameters:\n"
-        parent_config += "\n".join(step_param_lines) + "\n"
-
-        with open(pipeline_path / "config.yaml", "w") as f:
-            f.write(parent_config)
-
-        # Generate step config.yaml
-        with open(model_dir / "1" / "pipe_step_config.yaml") as f:
-            step_config = yaml.safe_load(f)
-
-        # Remove pipeline_step_input_params so we can add it manually
-        step_config.pop('pipeline_step_input_params', None)
-
-        # Dump base config without pipeline_step_input_params
-        with open(step_path / "config.yaml", "w") as f:
-            yaml.dump(step_config, f, default_flow_style=False, sort_keys=False)
-
-            # Manually append pipeline_step_input_params with proper indentation
-            f.write("\npipeline_step_input_params:\n")
-            for param_name in params_info:
-                f.write(f"  - name: {param_name}\n")
-                f.write(f"    description: \"\"\n")
-
-        # Copy static files
-        shutil.copy(model_dir / "train_Dockerfile", step_path / "Dockerfile")
-        shutil.copy(model_dir / "train_requirements.txt", step_path / "requirements.txt")
-        shutil.copy(model_dir / "1" / "pipeline_step.py", step_path / "1" / "pipeline_step.py")
-
-        # Copy model files
-        model_copy_path = step_path / "1" / "models" / "model"
-        shutil.copytree(model_dir, model_copy_path)
-
-        # Rename files to avoid conflicts (matching upload.sh behavior)
-        if (model_copy_path / "Dockerfile").exists():
-            (model_copy_path / "Dockerfile").rename(model_copy_path / "Dockerfil")
-        if (model_copy_path / "requirements.txt").exists():
-            (model_copy_path / "requirements.txt").rename(model_copy_path / "requiremen.txt")
-
-        logger.info(f"Pipeline structure created at {pipeline_path}")
-
     def train(self,
               # Resource IDs
               user_id: str = "YOUR_USER_ID",
@@ -212,7 +123,7 @@ class MMClassificationResNet50(VisualClassifierClass):
                 'artifact_id': 'mmclassificationresnet50-imagenet-1k',
                 'user_id': 'clarifai',
                 'app_id': 'train_pipelines',
-                'version_id': 'c43462691c064b65b5acc994f9462aff',
+                'version_id': '4b99f603aa26408185ec9be658e0d0cf',
                 'filename': 'resnet50_8xb256-rsb-a1-600e_in1k_20211228-20e21305.pth'
             }
         }
