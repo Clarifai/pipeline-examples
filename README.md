@@ -62,16 +62,17 @@ This creates a local pipeline directory with configuration files.
 
 ### Step 4: Configure Your Pipeline
 
-Construct the `config.yaml` file with your customized ID and hyperparameter values, e.g. set:
+Open and update the existing `config.yaml` file with your customized ID and hyperparameter values, e.g. set:
 
 - `user_id`: Your Clarifai user ID
 - `app_id`: Your application ID
 - `dataset_id`: Your dataset ID
+- `model_id`: The ID you want to assign to the model created by this pipeline
 - Other training hyperparameters as needed
 
 > **Note:** Need to upload a dataset first? Follow some examples at [https://github.com/Clarifai/examples/tree/main/datasets/upload](https://github.com/Clarifai/examples/tree/main/datasets/upload):
-> - For **object detection** : Use the VOC dataset example
-> - For **image classification** : Use the Food101 dataset example
+> - For **object detection**: Use the VOC dataset example
+> - For **image classification**: Use the Food101 dataset example
 
 ### Step 5: Upload the Pipeline
 
@@ -81,7 +82,7 @@ Upload your configured pipeline to Clarifai:
 clarifai pipeline upload
 ```
 
-**Important:** After enter above cmd, record the **Pipeline Version ID** displayed in the terminal output. You'll need this for the next step.
+**Important:** After entering the above command, record the **Pipeline Version ID** displayed in the terminal output. You'll need this for the next step.
 
 Example output:
 ```
@@ -113,7 +114,7 @@ clarifai pipeline run \
   --compute_cluster_id=cluster-aws-us-east-1-xyz789
 ```
 
-**Important:** After the cmd, record the **Pipeline Version Run ID** for monitoring.
+**Important:** After running the command, record the **Pipeline Version Run ID** for monitoring.
 
 Example output:
 ```
