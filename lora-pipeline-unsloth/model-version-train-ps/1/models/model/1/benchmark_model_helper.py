@@ -1,33 +1,31 @@
 #!/usr/bin/env python3
+"""
+GPU memory benchmark: spawns vLLM or sglang server subprocess,
+measures peak GPU memory via torch.cuda.max_memory_reserved + pynvml,
+returns max of both.
+"""
 import json
-import logging
 import math
-import os
 import subprocess
 import sys
 import time
-from pathlib import Path
+import logging
+import urllib.request
 
 import yaml
 
 try:
-    from pynvml import (
-        nvmlDeviceGetHandleByIndex,
-        nvmlDeviceGetMemoryInfo,
-        nvmlInit,
-        nvmlShutdown,
-    )
+    from pynvml import nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit, nvmlShutdown
     HAS_PYNVML = True
 except ImportError:
     HAS_PYNVML = False
 
-try:
-    from clarifai.utils.logging import logger
-except ImportError:
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 PYTHON_EXEC = sys.executable
+SERVER_PORT = 23334
+SERVER_URL = f"http://localhost:{SERVER_PORT}"
 
 
 class GPUMemoryMonitor:
@@ -46,10 +44,6 @@ class GPUMemoryMonitor:
         import torch
         return torch.cuda.memory_allocated(self.device_id) / 1024 / 1024
 
-    def reset_peak_memory(self):
-        import torch
-        torch.cuda.reset_peak_memory_stats(self.device_id)
-
     def cleanup(self):
         if self.use_pynvml:
             nvmlShutdown()
@@ -57,179 +51,177 @@ class GPUMemoryMonitor:
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *_):
         self.cleanup()
 
 
-def benchmark_model(
-    base_model_name: str,
-    adapter_path: str = None,
-    max_model_len: int = 4096,
-    device_id: int = 0,
-) -> dict:
-    """Benchmark vLLM serving by starting a subprocess and measuring GPU memory with pynvml."""
+def _vllm_cmd(model, max_model_len, adapter_path):
+    cmd = [
+        PYTHON_EXEC, "-m", "vllm.entrypoints.openai.api_server",
+        "--model", model,
+        "--max-model-len", str(max_model_len),
+        "--gpu-memory-utilization", "0.9",
+        "--dtype", "auto",
+        "--port", str(SERVER_PORT),
+        "--host", "localhost",
+        "--trust-remote-code",
+    ]
+    if adapter_path:
+        cmd += ["--enable-lora", "--lora-modules", f"adapter={adapter_path}"]
+    return cmd
+
+
+def _sglang_cmd(model, max_model_len, adapter_path):
+    cmd = [
+        PYTHON_EXEC, "-m", "sglang.launch_server",
+        "--model-path", model,
+        "--context-length", str(max_model_len),
+        "--mem-fraction-static", "0.9",
+        "--dtype", "auto",
+        "--port", str(SERVER_PORT),
+        "--host", "localhost",
+        "--trust-remote-code",
+    ]
+    if adapter_path:
+        cmd += ["--enable-lora", "--lora-paths", f"adapter={adapter_path}"]
+    return cmd
+
+
+def _wait_for_server(url, timeout=300, poll=3.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(f"{url}/health", timeout=2)
+            return
+        except Exception:
+            time.sleep(poll)
+    raise TimeoutError(f"Server at {url} not ready within {timeout}s")
+
+
+def benchmark_peak_gpu_mb(
+    base_model_name,
+    adapter_path=None,
+    max_model_len=4096,
+    device_id=0,
+    backend="vllm",
+    n_warmup_requests=5,
+    server_timeout=300,
+):
+    """
+    Start vLLM/sglang server, run warmup requests, return peak GPU memory
+    as max(torch.cuda.max_memory_reserved, pynvml peak).
+    """
     import torch
     if not torch.cuda.is_available():
-        logger.warning("CUDA not available, returning zero GPU requirements")
-        return {
-            "gpu_mb_required_minimum": 0,
-            "gpu_mb_model_load": 0,
-            "requested_gpu_mb_temporary": 0,
-        }
+        logger.warning("CUDA not available - returning zeros")
+        return {"torch_peak_mb": 0, "pynvml_peak_mb": 0, "peak_mb": 0}
 
-    logger.info(f"CUDA enabled for benchmark: {torch.cuda.get_device_name(device_id)}")
+    torch.cuda.reset_peak_memory_stats(device_id)
 
-    with GPUMemoryMonitor(device_id) as monitor:
-        # Measure baseline GPU memory
-        baseline_mb = monitor.get_memory_mb()
-        logger.info(f"Baseline GPU memory: {baseline_mb:.2f} MB")
+    build_cmd = _vllm_cmd if backend == "vllm" else _sglang_cmd
+    cmd = build_cmd(base_model_name, max_model_len, adapter_path)
 
-        # Start vLLM server subprocess
-        cmds = [
-            PYTHON_EXEC, '-m', 'vllm.entrypoints.openai.api_server',
-            '--model', base_model_name,
-            '--max-model-len', str(max_model_len),
-            '--gpu-memory-utilization', '0.9',
-            '--dtype', 'auto',
-            '--port', '23334',
-            '--host', 'localhost',
-            '--trust-remote-code',
-        ]
+    logger.info(f"[{backend}] launching server for {base_model_name}")
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-        if adapter_path:
-            cmds.extend(['--enable-lora', '--lora-modules', f'benchmark-adapter={adapter_path}'])
+    pynvml_peak_mb = 0.0
 
-        logger.info(f"Starting vLLM benchmark server...")
-        server_proc = subprocess.Popen(cmds, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        _wait_for_server(SERVER_URL, timeout=server_timeout)
+        logger.info("Server ready - running warmup requests")
+        time.sleep(3)
 
-        try:
-            # Wait for server to be ready
-            from clarifai.runners.utils.model_utils import wait_for_server
-            wait_for_server("http://localhost:23334", timeout=300)
-            logger.info("Benchmark server started")
+        import openai
+        client = openai.OpenAI(api_key="notset", base_url=f"{SERVER_URL}/v1")
+        model_id = client.models.list().data[0].id
 
-            # Measure GPU memory after model load
-            time.sleep(5)  # Allow memory to stabilize
-            model_load_mb = monitor.get_memory_mb()
-            logger.info(f"After model load: {model_load_mb:.2f} MB")
-
-            # Send test requests to measure peak memory
-            import openai
-            client = openai.OpenAI(api_key="notset", base_url="http://localhost:23334/v1")
-            models = client.models.list()
-            model_id = models.data[0].id
-
-            logger.info("Running benchmark requests...")
-            memories = []
-            for i in range(5):
+        with GPUMemoryMonitor(device_id) as mon:
+            for i in range(n_warmup_requests):
                 try:
                     client.chat.completions.create(
                         model=model_id,
-                        messages=[{"role": "user", "content": f"Write a short paragraph about the number {i}."}],
+                        messages=[{"role": "user", "content": f"Count to {i + 1}."}],
                         max_tokens=128,
                     )
                 except Exception as e:
-                    logger.warning(f"Benchmark request {i} failed: {e}")
-                time.sleep(1)
-                memories.append(monitor.get_memory_mb())
+                    logger.warning(f"Warmup request {i} failed: {e}")
+                pynvml_peak_mb = max(pynvml_peak_mb, mon.get_memory_mb())
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
-            peak_mb = max(memories) if memories else model_load_mb
+    torch_peak_mb = torch.cuda.max_memory_reserved(device_id) / 1024 / 1024
+    peak_mb = max(torch_peak_mb, pynvml_peak_mb)
 
-        finally:
-            # Shutdown server
-            logger.info("Shutting down benchmark server...")
-            server_proc.terminate()
-            try:
-                server_proc.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                server_proc.kill()
-                server_proc.wait()
-
-        working_mb = max(peak_mb - baseline_mb, 0)
-
-        logger.info(f"Peak GPU memory: {peak_mb:.2f} MB")
-        logger.info(f"Working memory: {working_mb:.2f} MB")
-
-        return {
-            "gpu_mb_required_minimum": int(peak_mb),
-            "gpu_mb_model_load": int(model_load_mb),
-            "requested_gpu_mb_temporary": int(working_mb),
-            "baseline_mb": float(baseline_mb),
-        }
+    logger.info(f"torch peak: {torch_peak_mb:.1f} MB | pynvml peak: {pynvml_peak_mb:.1f} MB | final: {peak_mb:.1f} MB")
+    return {
+        "torch_peak_mb": round(torch_peak_mb, 2),
+        "pynvml_peak_mb": round(pynvml_peak_mb, 2),
+        "peak_mb": round(peak_mb, 2),
+        "backend": backend,
+        "model": base_model_name,
+    }
 
 
-def update_config_with_benchmark(benchmark_results: dict, config_yaml_path: str):
+def update_config_with_benchmark(benchmark_results, config_yaml_path):
     with open(config_yaml_path) as f:
         config = yaml.safe_load(f)
 
-    gpu_mb_required = benchmark_results["gpu_mb_required_minimum"]
-    logger.info(f"Benchmark result: {gpu_mb_required} MB required")
+    gpu_mb = benchmark_results["peak_mb"]
+    gpu_gb = math.ceil(gpu_mb * 1.2 / 1024)  # 20% buffer
+    logger.info(f"Benchmark: {gpu_mb:.0f} MB -> {gpu_gb} Gi (with 20% buffer)")
 
-    # Add 20% buffer
-    gpu_mb_with_buffer = int(gpu_mb_required * 1.2)
-    gpu_gb = math.ceil(gpu_mb_with_buffer / 1024)
-
-    logger.info(f"With 20% buffer: {gpu_mb_with_buffer} MB -> {gpu_gb} GB")
-
-    if "inference_compute_info" not in config:
-        config["inference_compute_info"] = {}
-
+    config.setdefault("inference_compute_info", {})
     config["inference_compute_info"]["num_accelerators"] = 1
     config["inference_compute_info"]["accelerator_memory"] = f"{gpu_gb}Gi"
 
     with open(config_yaml_path, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
-    logger.info(f"Updated {config_yaml_path} with GPU requirement: {gpu_gb}Gi")
-
 
 def benchmark_and_update_config(
-    base_model_name: str,
-    adapter_path: str = None,
-    config_yaml_path: str = None,
-    max_model_len: int = 4096,
-    device_id: int = 0,
-    save_benchmark_json: str = None,
+    base_model_name,
+    adapter_path=None,
+    config_yaml_path=None,
+    max_model_len=4096,
+    device_id=0,
+    backend="vllm",
+    save_benchmark_json=None,
 ):
-    benchmark_results = benchmark_model(
-        base_model_name, adapter_path, max_model_len, device_id
+    results = benchmark_peak_gpu_mb(
+        base_model_name, adapter_path, max_model_len, device_id, backend
     )
-
     if save_benchmark_json:
         with open(save_benchmark_json, "w") as f:
-            json.dump(benchmark_results, f, indent=2)
-        logger.info(f"Saved benchmark results to {save_benchmark_json}")
-
+            json.dump(results, f, indent=2)
     if config_yaml_path:
-        update_config_with_benchmark(benchmark_results, config_yaml_path)
-
-    return benchmark_results
+        update_config_with_benchmark(results, config_yaml_path)
+    return results
 
 
 if __name__ == "__main__":
     import argparse
+    p = argparse.ArgumentParser(description="Benchmark LLM peak GPU memory")
+    p.add_argument("--base-model", required=True)
+    p.add_argument("--adapter-path", default=None)
+    p.add_argument("--config-yaml", default=None)
+    p.add_argument("--max-model-len", type=int, default=4096)
+    p.add_argument("--device-id", type=int, default=0)
+    p.add_argument("--backend", choices=["vllm", "sglang"], default="vllm")
+    p.add_argument("--save-json", default=None)
+    args = p.parse_args()
 
-    parser = argparse.ArgumentParser(
-        description="Benchmark LLM model and update config.yaml with GPU requirements",
-    )
-    parser.add_argument("--base-model", required=True, help="HuggingFace model ID")
-    parser.add_argument("--adapter-path", default=None, help="Path to LoRA adapter directory")
-    parser.add_argument("--config-yaml", required=True, help="Path to config.yaml to update")
-    parser.add_argument("--max-model-len", type=int, default=4096, help="Max model context length")
-    parser.add_argument("--device-id", type=int, default=0, help="GPU device ID")
-    parser.add_argument("--save-json", default=None, help="Save benchmark results to JSON file")
-
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-
-    benchmark_and_update_config(
+    results = benchmark_and_update_config(
         base_model_name=args.base_model,
         adapter_path=args.adapter_path,
         config_yaml_path=args.config_yaml,
         max_model_len=args.max_model_len,
         device_id=args.device_id,
+        backend=args.backend,
         save_benchmark_json=args.save_json,
     )
+    print(json.dumps(results, indent=2))
