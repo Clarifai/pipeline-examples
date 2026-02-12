@@ -1,6 +1,18 @@
-clarifai==12.1.4
+# Serving requirements for LoRA + vLLM inference
+# ------------------------------------------------
+# Docker: use vllm/vllm-openai:v0.15.1 base image (bundles vllm, torch, CUDA).
+#         Only the packages below need to be pip-installed on top.
+#
+# Conda reproducibility (bare metal / aarch64 GH200):
+#   conda create -n lora_serve python=3.11 -y
+#   conda activate lora_serve
+#   pip install vllm==0.15.1
+#   pip install torch==2.9.1 --force-reinstall --index-url https://download.pytorch.org/whl/cu128
+#   pip install -r requiremen.txt
+# ------------------------------------------------
+clarifai==12.1.7
+openai==2.20.0
+hf-transfer==0.1.9
 PyYAML==6.0.3
 pynvml==13.0.1
-vllm>=0.8.0
-openai>=1.0.0
 psutil>=5.9.0

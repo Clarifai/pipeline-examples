@@ -1,28 +1,25 @@
-FROM nvcr.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
-RUN echo "Building Clarifai LoRA LLM Docker image - build process starting!!!!!!"
-RUN apt-get update
-RUN apt-get install -y curl python3
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && cp /root/.local/bin/uv /usr/bin/uv
-RUN uv venv /venv
-
+# syntax=docker/dockerfile:1.13-labs
+FROM --platform=$TARGETPLATFORM vllm/vllm-openai:v0.15.1 as final
 COPY --link requirements.txt /home/nonroot/requirements.txt
 
-ENV VIRTUAL_ENV=/venv
-ENV PATH="/home/nonroot/.local/bin:$VIRTUAL_ENV/bin:$PATH"
-
-RUN ["uv", "pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
-RUN ["uv", "pip", "show", "--no-cache-dir", "clarifai"]
+# vllm base image bundles torch + CUDA. Install remaining deps on top.
+RUN ["pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
+RUN ["pip", "show", "--no-cache-dir", "clarifai"]
 
 ENV NUMBA_CACHE_DIR=/tmp/numba_cache \
     TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_cache \
     HOME=/tmp \
+    USER=nonroot \
     DEBIAN_FRONTEND=noninteractive
 
+# Create checkpoint cache directory with correct permissions
 COPY --chown=nonroot:nonroot downloader/unused.yaml /home/nonroot/main/1/checkpoints/.cache/unused.yaml
 
+# Download checkpoints if config.yaml has checkpoints.when = "build"
 COPY --link=true config.yaml /home/nonroot/main/
-RUN ["python", "-m", "clarifai.cli", "model", "download-checkpoints", "/home/nonroot/main", "--out_path", "/home/nonroot/main/1/checkpoints", "--stage", "build"]
+RUN ["python3", "-m", "clarifai.cli", "model", "download-checkpoints", "/home/nonroot/main", "--out_path", "/home/nonroot/main/1/checkpoints", "--stage", "build"]
 
+# Copy model code, config, and requirements
 COPY --link=true 1 /home/nonroot/main/1
 COPY --link=true requirements.txt config.yaml /home/nonroot/main/
 
@@ -34,5 +31,5 @@ ENV PYTHONPATH=${PYTHONPATH}:/home/nonroot/main \
     CLARIFAI_COMPUTE_CLUSTER_ID=${CLARIFAI_COMPUTE_CLUSTER_ID} \
     CLARIFAI_API_BASE=${CLARIFAI_API_BASE:-https://api.clarifai.com}
 
-ENTRYPOINT ["python", "-m", "clarifai.runners.server"]
+ENTRYPOINT ["python3", "-m", "clarifai.runners.server"]
 CMD ["--model_path", "/home/nonroot/main"]

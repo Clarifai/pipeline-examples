@@ -1,6 +1,6 @@
-clarifai==12.1.4
-clarifai-grpc==12.0.2
-boto3==1.42.4
+clarifai==12.1.7
+clarifai-grpc==12.1.0
+boto3==1.42.40
 pynvml==13.0.1
 PyYAML==6.0.3
 accelerate==1.9.0
@@ -9,6 +9,11 @@ hf-transfer==0.1.9
 huggingface_hub==0.34.2
 peft==0.16.0
 transformers==4.54.0
+tokenizers==0.21.4
 trl==0.19.1
-unsloth[cu128-torch270]==2025.7.8
+unsloth==2025.7.8
 unsloth_zoo==2025.7.10
+torchao==0.9.0
+bitsandbytes==0.49.1
+cut-cross-entropy==25.1.1
+openai==2.15.0
