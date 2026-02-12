@@ -1,14 +1,7 @@
-FROM nvcr.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
-RUN echo "Building Clarifai Image Classifier Docker image - build process starting!!!!!!"
-RUN apt-get update
-RUN apt-get install -y curl python3
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && cp /root/.local/bin/uv /usr/bin/uv
-RUN uv venv /venv
+FROM --platform=linux/amd64 pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
-COPY --link requirements.txt /home/nonroot/requirements.txt
-
-ENV VIRTUAL_ENV=/venv
-ENV PATH="/home/nonroot/.local/bin:$VIRTUAL_ENV/bin:$PATH"
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
 
 RUN apt-get update && apt-get install -y \
     libgl1 \
@@ -19,13 +12,14 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN ["uv", "pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
-RUN ["uv", "pip", "show", "--no-cache-dir", "clarifai"]
+COPY --link requirements.txt /home/nonroot/requirements.txt
+RUN pip install --no-cache-dir -r /home/nonroot/requirements.txt
+
+RUN pip show clarifai
 
 ENV NUMBA_CACHE_DIR=/tmp/numba_cache \
     TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_cache \
-    HOME=/tmp \
-    DEBIAN_FRONTEND=noninteractive
+    HOME=/tmp
 
 COPY --chown=nonroot:nonroot downloader/unused.yaml /home/nonroot/main/1/checkpoints/.cache/unused.yaml
 
