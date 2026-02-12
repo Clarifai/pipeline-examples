@@ -1,0 +1,113 @@
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  step_directories:
+    - model-version-train-ps
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: <YOUR_PIPELINE_ID>
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: model_id
+              value: "test_model"
+            - name: base_model_name
+              value: "unsloth/Qwen3-32B"
+            - name: dataset_name
+              value: "mlabonne/FineTome-100k"
+            - name: max_seq_length
+              value: 2048
+            - name: load_in_4bit
+              value: true
+            - name: lora_r
+              value: 16
+            - name: lora_alpha
+              value: 16
+            - name: lora_dropout
+              value: 0.0
+            - name: num_epochs
+              value: 1
+            - name: batch_size
+              value: 4
+            - name: gradient_accumulation_steps
+              value: 4
+            - name: learning_rate
+              value: 0.0002
+            - name: lr_scheduler_type
+              value: "cosine"
+            - name: warmup_ratio
+              value: 0.06
+            - name: weight_decay
+              value: 0.01
+            - name: max_steps
+              value: -1
+            - name: logging_steps
+              value: 10
+            - name: save_steps
+              value: 100
+            - name: seed
+              value: 105
+            - name: num_gpus
+              value: 1
+        templates:
+        - name: sequence
+          steps:
+          - - name: model-version-train-ps-name
+              templateRef:
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+              arguments:
+                parameters:
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: model_id
+                    value: "{{workflow.parameters.model_id}}"
+                  - name: base_model_name
+                    value: "{{workflow.parameters.base_model_name}}"
+                  - name: dataset_name
+                    value: "{{workflow.parameters.dataset_name}}"
+                  - name: max_seq_length
+                    value: "{{workflow.parameters.max_seq_length}}"
+                  - name: load_in_4bit
+                    value: "{{workflow.parameters.load_in_4bit}}"
+                  - name: lora_r
+                    value: "{{workflow.parameters.lora_r}}"
+                  - name: lora_alpha
+                    value: "{{workflow.parameters.lora_alpha}}"
+                  - name: lora_dropout
+                    value: "{{workflow.parameters.lora_dropout}}"
+                  - name: num_epochs
+                    value: "{{workflow.parameters.num_epochs}}"
+                  - name: batch_size
+                    value: "{{workflow.parameters.batch_size}}"
+                  - name: gradient_accumulation_steps
+                    value: "{{workflow.parameters.gradient_accumulation_steps}}"
+                  - name: learning_rate
+                    value: "{{workflow.parameters.learning_rate}}"
+                  - name: lr_scheduler_type
+                    value: "{{workflow.parameters.lr_scheduler_type}}"
+                  - name: warmup_ratio
+                    value: "{{workflow.parameters.warmup_ratio}}"
+                  - name: weight_decay
+                    value: "{{workflow.parameters.weight_decay}}"
+                  - name: max_steps
+                    value: "{{workflow.parameters.max_steps}}"
+                  - name: logging_steps
+                    value: "{{workflow.parameters.logging_steps}}"
+                  - name: save_steps
+                    value: "{{workflow.parameters.save_steps}}"
+                  - name: seed
+                    value: "{{workflow.parameters.seed}}"
+                  - name: num_gpus
+                    value: "{{workflow.parameters.num_gpus}}"
