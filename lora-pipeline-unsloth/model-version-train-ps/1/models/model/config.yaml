@@ -11,4 +11,4 @@ inference_compute_info:
   num_accelerators: 1
   accelerator_type:
   - NVIDIA-*
-  accelerator_memory: 40Gi
+  accelerator_memory: 95Gi

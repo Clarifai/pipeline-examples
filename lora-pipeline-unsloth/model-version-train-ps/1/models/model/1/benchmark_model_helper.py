@@ -98,23 +98,12 @@ def _wait_for_server(url, timeout=300, poll=3.0):
     raise TimeoutError(f"Server at {url} not ready within {timeout}s")
 
 
-def benchmark_peak_gpu_mb(
-    base_model_name,
-    adapter_path=None,
-    max_model_len=4096,
-    device_id=0,
-    backend="vllm",
-    n_warmup_requests=5,
-    server_timeout=300,
+def _benchmark_via_server(
+    base_model_name, adapter_path, max_model_len, device_id, backend,
+    n_warmup_requests, server_timeout,
 ):
-    """
-    Start vLLM/sglang server, run warmup requests, return peak GPU memory
-    as max(torch.cuda.max_memory_reserved, pynvml peak).
-    """
+    """Benchmark by launching vLLM/sglang server subprocess."""
     import torch
-    if not torch.cuda.is_available():
-        logger.warning("CUDA not available - returning zeros")
-        return {"torch_peak_mb": 0, "pynvml_peak_mb": 0, "peak_mb": 0}
 
     torch.cuda.reset_peak_memory_stats(device_id)
 
@@ -156,6 +145,82 @@ def benchmark_peak_gpu_mb(
 
     torch_peak_mb = torch.cuda.max_memory_reserved(device_id) / 1024 / 1024
     peak_mb = max(torch_peak_mb, pynvml_peak_mb)
+    return torch_peak_mb, pynvml_peak_mb, peak_mb
+
+
+def _benchmark_via_transformers(base_model_name, adapter_path, device_id):
+    """Fallback benchmark: load model with transformers + peft, measure GPU memory."""
+    import torch
+    from transformers import AutoModelForCausalLM
+    from peft import PeftModel
+
+    torch.cuda.reset_peak_memory_stats(device_id)
+
+    logger.info(f"[transformers] loading {base_model_name} for memory measurement")
+    model = AutoModelForCausalLM.from_pretrained(
+        base_model_name, torch_dtype=torch.float16, device_map="auto",
+        trust_remote_code=True,
+    )
+    if adapter_path:
+        logger.info(f"[transformers] loading LoRA adapter from {adapter_path}")
+        model = PeftModel.from_pretrained(model, adapter_path)
+
+    # Measure peak GPU memory after loading (weights are the main memory consumer)
+    pynvml_peak_mb = 0.0
+    with GPUMemoryMonitor(device_id) as mon:
+        pynvml_peak_mb = mon.get_memory_mb()
+
+    torch_peak_mb = torch.cuda.max_memory_reserved(device_id) / 1024 / 1024
+    peak_mb = max(torch_peak_mb, pynvml_peak_mb)
+
+    del model
+    torch.cuda.empty_cache()
+
+    return torch_peak_mb, pynvml_peak_mb, peak_mb
+
+
+def benchmark_peak_gpu_mb(
+    base_model_name,
+    adapter_path=None,
+    max_model_len=4096,
+    device_id=0,
+    backend="vllm",
+    n_warmup_requests=5,
+    server_timeout=300,
+):
+    """
+    Measure peak GPU memory for model inference.
+
+    Tries to launch a vLLM/sglang server first. If that fails (e.g. backend not
+    installed), falls back to loading the model with transformers + peft.
+    """
+    import torch
+    if not torch.cuda.is_available():
+        logger.warning("CUDA not available - returning zeros")
+        return {"torch_peak_mb": 0, "pynvml_peak_mb": 0, "peak_mb": 0}
+
+    # Check if the backend is importable before wasting time on a timeout
+    _backend_module = "vllm" if backend == "vllm" else "sglang"
+    try:
+        __import__(_backend_module)
+        _backend_available = True
+    except ImportError:
+        _backend_available = False
+        logger.info(f"{_backend_module} not installed, skipping server-based benchmark")
+
+    try:
+        if not _backend_available:
+            raise ImportError(f"{_backend_module} not installed")
+        torch_peak_mb, pynvml_peak_mb, peak_mb = _benchmark_via_server(
+            base_model_name, adapter_path, max_model_len, device_id, backend,
+            n_warmup_requests, server_timeout,
+        )
+    except Exception as e:
+        logger.warning(f"Server-based benchmark failed ({e}), falling back to transformers")
+        torch_peak_mb, pynvml_peak_mb, peak_mb = _benchmark_via_transformers(
+            base_model_name, adapter_path, device_id,
+        )
+        backend = "transformers"
 
     logger.info(f"torch peak: {torch_peak_mb:.1f} MB | pynvml peak: {pynvml_peak_mb:.1f} MB | final: {peak_mb:.1f} MB")
     return {

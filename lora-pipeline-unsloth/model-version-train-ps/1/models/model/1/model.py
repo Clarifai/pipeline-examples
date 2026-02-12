@@ -117,8 +117,8 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         return parser
     
     def train(self,
-              user_id: str = "YOUR_USER_ID",
-              app_id: str = "YOUR_APP_ID",
+              user_id: str = "christine_yu",
+              app_id: str = "test_lora_pipeline_app",
               model_id: str = "test_model",
               base_model_name: str = "unsloth/Qwen3-32B",
               dataset_name: str = "mlabonne/FineTome-100k",
@@ -140,6 +140,10 @@ class UnslothLoRAVLLM(OpenAIModelClass):
               seed: int = 105,
               num_gpus: int = 1,
               ) -> str:
+        # Disable torch.compile/dynamo - cut_cross_entropy's backward pass uses
+        # torch.compile which can fail on certain platforms (e.g. aarch64 GH200).
+        os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
