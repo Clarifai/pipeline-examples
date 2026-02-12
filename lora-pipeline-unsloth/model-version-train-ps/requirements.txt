@@ -1,0 +1,14 @@
+clarifai==12.1.4
+clarifai-grpc==12.0.2
+boto3==1.42.4
+pynvml==13.0.1
+PyYAML==6.0.3
+accelerate==1.9.0
+datasets==3.6.0
+hf-transfer==0.1.9
+huggingface_hub==0.34.2
+peft==0.16.0
+transformers==4.54.0
+trl==0.19.1
+unsloth[cu128-torch270]==2025.7.8
+unsloth_zoo==2025.7.10

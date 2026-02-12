@@ -1,0 +1,61 @@
+pipeline_step:
+  id: "model-version-train-ps"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "4000m"
+  cpu_memory: "16Gi"
+  num_accelerators: 1
+  accelerator_memory: "80Gi"
+  accelerator_type: ["NVIDIA-GH200", "NVIDIA-A100-SXM4-80GB", "NVIDIA-H100-80GB-HBM3", "NVIDIA-*"]
+
+pipeline_step_input_params:
+  - name: user_id
+    description: "User ID"
+  - name: app_id
+    description: "App ID"
+  - name: model_id
+    description: "Model ID"
+  - name: base_model_name
+    description: "HuggingFace model ID for the base model (e.g. unsloth/Qwen3-32B)"
+  - name: dataset_name
+    description: "HuggingFace dataset ID for fine-tuning data"
+  - name: max_seq_length
+    description: "Maximum sequence length for training"
+  - name: load_in_4bit
+    description: "Use 4-bit quantization for base model weights"
+  - name: lora_r
+    description: "LoRA rank"
+  - name: lora_alpha
+    description: "LoRA scaling parameter"
+  - name: lora_dropout
+    description: "Dropout for LoRA layers"
+  - name: num_epochs
+    description: "Number of training epochs (used when max_steps=-1)"
+  - name: batch_size
+    description: "Per-device training batch size"
+  - name: gradient_accumulation_steps
+    description: "Gradient accumulation steps"
+  - name: learning_rate
+    description: "Peak learning rate"
+  - name: lr_scheduler_type
+    description: "Learning rate scheduler type"
+  - name: warmup_ratio
+    description: "Warmup ratio"
+  - name: weight_decay
+    description: "Weight decay"
+  - name: max_steps
+    description: "Max training steps (-1 to use num_epochs)"
+  - name: logging_steps
+    description: "Log every N steps"
+  - name: save_steps
+    description: "Save checkpoint every N steps"
+  - name: seed
+    description: "Random seed"
+  - name: num_gpus
+    description: "Number of GPUs to use"

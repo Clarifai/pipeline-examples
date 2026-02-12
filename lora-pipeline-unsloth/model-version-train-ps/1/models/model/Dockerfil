@@ -1,0 +1,38 @@
+FROM nvcr.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
+RUN echo "Building Clarifai LoRA LLM Docker image - build process starting!!!!!!"
+RUN apt-get update
+RUN apt-get install -y curl python3
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && cp /root/.local/bin/uv /usr/bin/uv
+RUN uv venv /venv
+
+COPY --link requirements.txt /home/nonroot/requirements.txt
+
+ENV VIRTUAL_ENV=/venv
+ENV PATH="/home/nonroot/.local/bin:$VIRTUAL_ENV/bin:$PATH"
+
+RUN ["uv", "pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
+RUN ["uv", "pip", "show", "--no-cache-dir", "clarifai"]
+
+ENV NUMBA_CACHE_DIR=/tmp/numba_cache \
+    TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_cache \
+    HOME=/tmp \
+    DEBIAN_FRONTEND=noninteractive
+
+COPY --chown=nonroot:nonroot downloader/unused.yaml /home/nonroot/main/1/checkpoints/.cache/unused.yaml
+
+COPY --link=true config.yaml /home/nonroot/main/
+RUN ["python", "-m", "clarifai.cli", "model", "download-checkpoints", "/home/nonroot/main", "--out_path", "/home/nonroot/main/1/checkpoints", "--stage", "build"]
+
+COPY --link=true 1 /home/nonroot/main/1
+COPY --link=true requirements.txt config.yaml /home/nonroot/main/
+
+ENV PYTHONPATH=${PYTHONPATH}:/home/nonroot/main \
+    CLARIFAI_PAT=${CLARIFAI_PAT} \
+    CLARIFAI_USER_ID=${CLARIFAI_USER_ID} \
+    CLARIFAI_RUNNER_ID=${CLARIFAI_RUNNER_ID} \
+    CLARIFAI_NODEPOOL_ID=${CLARIFAI_NODEPOOL_ID} \
+    CLARIFAI_COMPUTE_CLUSTER_ID=${CLARIFAI_COMPUTE_CLUSTER_ID} \
+    CLARIFAI_API_BASE=${CLARIFAI_API_BASE:-https://api.clarifai.com}
+
+ENTRYPOINT ["python", "-m", "clarifai.runners.server"]
+CMD ["--model_path", "/home/nonroot/main"]
