@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Test script: load LoRA adapter with vLLM and run inference."""
+"""Test script: load LoRA adapter with vLLM and run inference + benchmark."""
 import sys
 import os
 
@@ -15,6 +15,10 @@ from openai import OpenAI
 BASE_MODEL = "unsloth/Qwen3-32B"
 ADAPTER_PATH = "/tmp/lora_work_dir/lora_adapter"
 LORA_MODEL_ID = "lora-adapter"
+
+# Qwen3 thinking mode generates very long chains; disable for fast tests
+NO_THINK = {"chat_template_kwargs": {"enable_thinking": False}}
+
 
 def main():
     print("=" * 60)
@@ -44,8 +48,9 @@ def main():
     response = client.chat.completions.create(
         model=LORA_MODEL_ID,
         messages=[{"role": "user", "content": "Hello, how are you?"}],
-        max_tokens=128,
+        max_tokens=64,
         temperature=0.7,
+        extra_body=NO_THINK,
     )
     print(response.choices[0].message.content)
 
@@ -54,9 +59,10 @@ def main():
     for chunk in client.chat.completions.create(
         model=LORA_MODEL_ID,
         messages=[{"role": "user", "content": "Write a haiku about coding."}],
-        max_tokens=128,
+        max_tokens=64,
         temperature=0.7,
         stream=True,
+        extra_body=NO_THINK,
     ):
         if chunk.choices and chunk.choices[0].delta.content:
             print(chunk.choices[0].delta.content, end="", flush=True)
@@ -67,8 +73,14 @@ def main():
     m = UnslothLoRAVLLM()
     m.client = client
     m.model = LORA_MODEL_ID
-    result = m.predict(prompt="What is 2+2?")
+    result = m.predict(prompt="What is 2+2?", max_tokens=32)
     print(result)
+
+    # Benchmark GPU memory using the running server
+    print("\n--- Test 4: benchmark() ---")
+    m.server = server
+    results = m.benchmark(n_warmup_requests=5)
+    print(f"Benchmark results: {results}")
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED")

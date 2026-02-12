@@ -13,13 +13,11 @@ from clarifai.runners.utils.openai_convertor import build_openai_messages
 from clarifai.utils.logging import logger
 
 try:
-    from .benchmark_model_helper import benchmark_and_update_config
     from .model_export_helper import export_and_upload_lora_model
 except ImportError:
     _dir = Path(__file__).parent
     if str(_dir) not in sys.path:
         sys.path.insert(0, str(_dir))
-    from benchmark_model_helper import benchmark_and_update_config
     from model_export_helper import export_and_upload_lora_model
 
 logging.basicConfig(level=logging.INFO)
@@ -273,28 +271,12 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         del trainer, model
         torch.cuda.empty_cache()
 
-        # STEP 6: Benchmark Model and Update Config
+        # STEP 6: Export and Upload Model to Clarifai
         logging.info("=" * 80)
-        logging.info("STEP 6: Benchmarking Model for GPU Requirements")
+        logging.info("STEP 6: Exporting and Uploading Model to Clarifai")
         logging.info("=" * 80)
 
         model_template_dir = Path(__file__).parent.parent
-        config_yaml_path = model_template_dir / "config.yaml"
-
-        if config_yaml_path.exists():
-            benchmark_and_update_config(
-                base_model_name=base_model_name,
-                adapter_path=adapter_path,
-                config_yaml_path=str(config_yaml_path),
-                max_model_len=min(max_seq_length, 4096),
-                save_benchmark_json=os.path.join(work_dir, "benchmark.json"),
-            )
-
-        # STEP 7: Export and Upload Model to Clarifai
-        logging.info("=" * 80)
-        logging.info("STEP 7: Exporting and Uploading Model to Clarifai")
-        logging.info("=" * 80)
-
         export_and_upload_lora_model(
             adapter_path=adapter_path,
             base_model_name=base_model_name,
@@ -393,6 +375,65 @@ class UnslothLoRAVLLM(OpenAIModelClass):
                 yield text if text is not None else ''
             else:
                 yield ""
+
+    def benchmark(self, n_warmup_requests=5, device_id=0):
+        """Benchmark GPU memory using the already-running vLLM server.
+
+        Runs warmup inference requests while tracking peak GPU memory via
+        pynvml (driver-level, works cross-process) and optionally torch.cuda
+        (in-process only). Returns max of both.
+        Must be called after load_model().
+        """
+        from pynvml import nvmlInit, nvmlShutdown, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
+
+        # torch.cuda stats only work if CUDA is initialized in this process.
+        # vLLM runs as a subprocess so torch.cuda may not be available here.
+        torch_peak_mb = 0.0
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.reset_peak_memory_stats(device_id)
+                has_torch = True
+            else:
+                has_torch = False
+        except Exception:
+            has_torch = False
+
+        nvmlInit()
+        handle = nvmlDeviceGetHandleByIndex(device_id)
+        pynvml_peak_mb = 0.0
+
+        try:
+            for i in range(n_warmup_requests):
+                try:
+                    self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[{"role": "user", "content": f"Count to {i + 1}."}],
+                        max_tokens=64,
+                        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                    )
+                except Exception as e:
+                    logger.warning(f"Warmup request {i} failed: {e}")
+
+                info = nvmlDeviceGetMemoryInfo(handle)
+                pynvml_peak_mb = max(pynvml_peak_mb, info.used / 1024 / 1024)
+        finally:
+            nvmlShutdown()
+
+        if has_torch:
+            torch_peak_mb = torch.cuda.max_memory_reserved(device_id) / 1024 / 1024
+
+        peak_mb = max(torch_peak_mb, pynvml_peak_mb)
+
+        print(f"torch peak:  {torch_peak_mb:,.1f} MB")
+        print(f"pynvml peak: {pynvml_peak_mb:,.1f} MB")
+        print(f"final (max): {peak_mb:,.1f} MB")
+
+        return {
+            "torch_peak_mb": round(torch_peak_mb, 2),
+            "pynvml_peak_mb": round(pynvml_peak_mb, 2),
+            "peak_mb": round(peak_mb, 2),
+        }
 
     def test(self):
         print("Testing predict...")
