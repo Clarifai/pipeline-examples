@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 import traceback
 import yaml
 from pathlib import Path
@@ -32,7 +33,6 @@ def upload_checkpoint_to_artifact(checkpoint_path, user_id, app_id, model_id):
 
 def export_and_upload_lora_model(
     adapter_path: str,
-    base_model_name: str,
     source_model_dir: Path,
     clarifai_pat: str,
     clarifai_api_base: str,
@@ -46,19 +46,12 @@ def export_and_upload_lora_model(
 
     adapter_path = Path(adapter_path)
     if not adapter_path.exists():
-        logger.error(f"Adapter directory not found: {adapter_path}")
         raise FileNotFoundError(f"Adapter directory not found: {adapter_path}")
-
-    # List adapter files
-    adapter_files = list(adapter_path.iterdir())
-    total_size_mb = sum(f.stat().st_size for f in adapter_files if f.is_file()) / 1024 / 1024
-    logger.info(f"Found {len(adapter_files)} adapter files, total size: {total_size_mb:.1f} MB")
 
     logger.info("Preparing model package for upload...")
     copy_model_files_and_upload(
         source_model_dir=source_model_dir,
         adapter_path=adapter_path,
-        base_model_name=base_model_name,
         clarifai_pat=clarifai_pat,
         clarifai_api_base=clarifai_api_base,
         user_id=user_id,
@@ -70,7 +63,6 @@ def export_and_upload_lora_model(
 def copy_model_files_and_upload(
     source_model_dir: Path,
     adapter_path: Path,
-    base_model_name: str,
     clarifai_pat: str,
     clarifai_api_base: str,
     user_id: str = None,
@@ -78,17 +70,10 @@ def copy_model_files_and_upload(
     model_id: str = None,
 ):
     try:
-        temp_dir = Path("trained_model_temp")
+        temp_dir = Path(tempfile.mkdtemp(prefix="lora_export_"))
         model_dir = temp_dir / "lora_model"
 
         logger.info(f"Creating model package in: {model_dir}")
-
-        if model_dir.exists():
-            logger.warning(f"Directory already exists from previous run: {model_dir}")
-            logger.warning("Removing existing directory before creating new one...")
-            shutil.rmtree(model_dir)
-            logger.info("Existing directory removed")
-
         shutil.copytree(source_model_dir, model_dir)
 
         # Handle naming conventions for Clarifai compatibility
@@ -104,14 +89,9 @@ def copy_model_files_and_upload(
             logger.info("Renaming Dockerfil -> Dockerfile")
             dockerfil.rename(dockerfile)
 
-        # Copy LoRA adapter files into checkpoints directory
-        checkpoints_dir = model_dir / "1" / "checkpoints"
-        checkpoints_dir.mkdir(parents=True, exist_ok=True)
-
-        adapter_dest = checkpoints_dir / "lora_adapter"
-        logger.info(f"Copying LoRA adapter to: {adapter_dest}")
+        # Copy LoRA adapter files alongside model.py (e.g. 1/{model_id}_lora/)
+        adapter_dest = model_dir / "1" / f"{model_id}_lora"
         shutil.copytree(adapter_path, adapter_dest)
-        logger.info("LoRA adapter copied successfully")
 
         # Upload adapter as artifact
         # Create a tar of the adapter for artifact upload
@@ -121,34 +101,20 @@ def copy_model_files_and_upload(
             tar.add(adapter_path, arcname="lora_adapter")
         upload_checkpoint_to_artifact(adapter_tar_path, user_id, app_id, model_id)
 
-        # Update config.yaml with base model info and checkpoints
+        # Update config.yaml with model identity
         config_path = model_dir / "config.yaml"
-        logger.info("Updating config.yaml with base model and adapter info")
-
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
 
-        # Set checkpoints to point to the base model repo_id
-        # The adapter will be loaded from the local checkpoints directory
-        config["checkpoints"] = {
-            "repo_id": base_model_name,
-            "when": "runtime",
-        }
-
         if user_id:
             config["model"]["user_id"] = user_id
-            logger.info(f"Set user_id: {user_id}")
         if app_id:
             config["model"]["app_id"] = app_id
-            logger.info(f"Set app_id: {app_id}")
         if model_id:
             config["model"]["id"] = model_id
-            logger.info(f"Set model_id: {model_id}")
 
         with open(config_path, "w") as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-
-        logger.info("Config updated successfully")
 
         # Upload to Clarifai
         logger.info("=" * 80)

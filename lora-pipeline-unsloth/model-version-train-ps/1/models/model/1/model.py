@@ -3,7 +3,6 @@ import os
 import sys
 import subprocess
 import inspect
-import shutil
 from typing import List, Iterator
 from pathlib import Path
 
@@ -117,7 +116,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
     def train(self,
               user_id: str = "christine_yu",
               app_id: str = "test_lora_pipeline_app",
-              model_id: str = "test_model",
+              model_id: str = "test_qwen_30b_model",
               base_model_name: str = "unsloth/Qwen3-32B",
               dataset_name: str = "mlabonne/FineTome-100k",
               max_seq_length: int = 2048,
@@ -132,7 +131,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
               lr_scheduler_type: str = "cosine",
               warmup_ratio: float = 0.06,
               weight_decay: float = 0.01,
-              max_steps: int = -1,
+              max_steps: int = 5, # default -1
               logging_steps: int = 10,
               save_steps: int = 100,
               seed: int = 105,
@@ -279,7 +278,6 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         model_template_dir = Path(__file__).parent.parent
         export_and_upload_lora_model(
             adapter_path=adapter_path,
-            base_model_name=base_model_name,
             source_model_dir=model_template_dir,
             clarifai_pat=pat,
             clarifai_api_base=os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com"),
@@ -292,13 +290,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         return adapter_path
 
     def load_model(self):
-        """Load the fine-tuned model and start the vLLM server with LoRA adapter.
-
-        Follows production pattern from vllm-gemma-3-4b-it/1/model.py:
-        - lora_modules as list of name=path
-        - max_lora_rank matching training rank
-        - self.model = adapter name (routes requests to LoRA adapter)
-        """
+        """Load base model + LoRA adapter and start vLLM server."""
         from openai import OpenAI
         from clarifai.runners.models.model_builder import ModelBuilder
 
@@ -306,14 +298,15 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         builder = ModelBuilder(model_path, download_validation_only=True)
         model_config = builder.config
 
-        checkpoints_config = model_config.get("checkpoints", {})
-        base_model = checkpoints_config.get("repo_id")
+        # LoRA adapter folder sits alongside model.py: 1/{model_id}_lora/
+        model_id = model_config.get("model", {}).get("id")
+        lora_path = os.path.join(os.path.dirname(__file__), f"{model_id}_lora")
 
-        # Download checkpoints (adapter files)
-        stage = checkpoints_config.get("when", "runtime")
-        adapter_path = None
+        # Download base model checkpoints
+        stage = model_config["checkpoints"]["when"]
+        checkpoints = model_config["checkpoints"]["repo_id"]
         if stage in ["build", "runtime"]:
-            adapter_path = builder.download_checkpoints(stage=stage)
+            checkpoints = builder.download_checkpoints(stage=stage)
 
         server_args = {
             'gpu_memory_utilization': 0.9,
@@ -323,21 +316,18 @@ class UnslothLoRAVLLM(OpenAIModelClass):
             'host': 'localhost',
             'trust_remote_code': True,
             'enable_lora': True,
-            'max_lora_rank': 64,  # accommodate up to rank 64 adapters
+            'max_lora_rank': 64,
         }
 
-        if adapter_path:
-            server_args['lora_modules'] = [f"{self.LORA_MODEL_ID}={adapter_path}"]
+        if os.path.isdir(lora_path):
+            server_args['lora_modules'] = [f"{self.LORA_MODEL_ID}={lora_path}"]
 
-        self.server = vllm_openai_server(base_model, **server_args)
-
+        self.server = vllm_openai_server(checkpoints, **server_args)
         self.client = OpenAI(
             api_key="notset",
             base_url=f'http://{self.server.host}:{self.server.port}/v1'
         )
-        # Use LoRA adapter name as model id so requests route to the adapter
         self.model = self.LORA_MODEL_ID
-        logger.info(f"vLLM model loaded with LoRA adapter: {self.model}")
 
     @OpenAIModelClass.method
     def predict(self,

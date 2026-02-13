@@ -1,14 +1,19 @@
 model:
-  id: lora-fine-tuned-model
-  user_id: placeholder_user
-  app_id: placeholder_app
+  id: test_qwen_30b_model
+  user_id: christine_yu
+  app_id: test_lora_pipeline_app
   model_type_id: text-to-text
 build_info:
   python_version: '3.11'
 inference_compute_info:
-  cpu_limit: '4'
-  cpu_memory: 16Gi
+  cpu_limit: '6'
+  cpu_memory: 32Gi
   num_accelerators: 1
   accelerator_type:
   - NVIDIA-*
   accelerator_memory: 95Gi
+num_threads: 128
+checkpoints:
+  type: huggingface
+  repo_id: unsloth/Qwen3-32B
+  when: runtime
