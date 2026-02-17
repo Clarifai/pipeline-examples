@@ -84,8 +84,8 @@ class MMDetectionYoloF(VisualDetectorClass):
               app_id: str = "YOUR_APP_ID",
               model_id: str = "test_detector",
               dataset_id: str = "YOUR_DATASET_ID",
+              concepts: str = '["bird","cat"]',
               seed: int = -1,
-              num_gpus: int = 1,
               image_size: str = "[512]",
               max_aspect_ratio: float = 1.5,
               keep_aspect_ratio: bool = True,
@@ -96,8 +96,6 @@ class MMDetectionYoloF(VisualDetectorClass):
               pretrained_weights: str = "coco",
               frozen_stages: int = 1,
               inference_max_batch_size: int = 2,
-              is_cpu: int = 0,
-              concepts: str = '["bird","cat"]'
               ) -> str:
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
@@ -110,7 +108,13 @@ class MMDetectionYoloF(VisualDetectorClass):
 
         logging.info("Starting MMDetection YOLOF training pipeline")
 
+        # Hardcode is_cpu and num_gpus
+        is_cpu = 0
+        num_gpus = 1
+
+        # Map pretrained_weights to checkpoint paths (similar to EfficientNet pattern)
         pretrained_weights_artifacts = {
+            '': None,  # No pretrained weights
             'coco': {
                 'artifact_id': 'mmdetectionyolof-coco',
                 'user_id': 'clarifai',
@@ -120,20 +124,24 @@ class MMDetectionYoloF(VisualDetectorClass):
             }
         }
 
-        artifact_info = pretrained_weights_artifacts[pretrained_weights]
-        checkpoint_dir = "/tmp/pretrain_checkpoints"
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_path = os.path.join(checkpoint_dir, artifact_info['filename'])
-        version = ArtifactVersion()
-        checkpoint_root = version.download(
-            artifact_id=artifact_info['artifact_id'],
-            user_id=artifact_info['user_id'],
-            app_id=artifact_info['app_id'],
-            version_id=artifact_info['version_id'],
-            output_path=checkpoint_path,
-            force=True,
-        )
-        logging.info(f"Downloaded checkpoint to {checkpoint_root}")
+        artifact_info = pretrained_weights_artifacts.get(pretrained_weights)
+        if artifact_info is not None:
+            checkpoint_dir = "/tmp/pretrain_checkpoints"
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint_path = os.path.join(checkpoint_dir, artifact_info['filename'])
+            version = ArtifactVersion()
+            checkpoint_root = version.download(
+                artifact_id=artifact_info['artifact_id'],
+                user_id=artifact_info['user_id'],
+                app_id=artifact_info['app_id'],
+                version_id=artifact_info['version_id'],
+                output_path=checkpoint_path,
+                force=True,
+            )
+            logging.info(f"Downloaded checkpoint to {checkpoint_root}")
+        else:
+            checkpoint_root = ''
+            logging.info("Training from scratch (no pretrained weights)")
 
         logging.info("")
         logging.info("=" * 80)
@@ -185,8 +193,8 @@ class MMDetectionYoloF(VisualDetectorClass):
             logging.info(f"Using {len(dataset_classes)} classes from dataset: {dataset_classes}")
 
         self.seed = seed
-        self.is_cpu = is_cpu
-        self.num_gpus = 0 if self.is_cpu else num_gpus
+        self.is_cpu = is_cpu  # Hardcoded to 0
+        self.num_gpus = num_gpus  # Hardcoded to 1
         self.image_size = image_size_list
         self.max_aspect_ratio = max_aspect_ratio
         self.keep_aspect_ratio = keep_aspect_ratio

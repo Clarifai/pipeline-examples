@@ -22,8 +22,8 @@ pipeline:
               value: "test_model"
             - name: dataset_id
               value: "<YOUR_DATASET_ID>"
-            - name: num_classes
-              value: 4
+            - name: concepts
+              value: '["beignets","hamburger","prime_rib","ramen"]'
             - name: num_epochs
               value: 200
             - name: batch_size
@@ -50,12 +50,6 @@ pipeline:
               value: "ImageNet-1k"
             - name: seed
               value: -1
-            - name: is_cpu
-              value: 0
-            - name: num_gpus
-              value: 1
-            - name: concepts
-              value: '["beignets","hamburger","prime_rib","ramen"]'
         templates:
         - name: sequence
           steps:
@@ -73,8 +67,8 @@ pipeline:
                     value: "{{workflow.parameters.model_id}}"
                   - name: dataset_id
                     value: "{{workflow.parameters.dataset_id}}"
-                  - name: num_classes
-                    value: "{{workflow.parameters.num_classes}}"
+                  - name: concepts
+                    value: "{{workflow.parameters.concepts}}"
                   - name: num_epochs
                     value: "{{workflow.parameters.num_epochs}}"
                   - name: batch_size
@@ -101,10 +95,4 @@ pipeline:
                     value: "{{workflow.parameters.pretrained_weights}}"
                   - name: seed
                     value: "{{workflow.parameters.seed}}"
-                  - name: is_cpu
-                    value: "{{workflow.parameters.is_cpu}}"
-                  - name: num_gpus
-                    value: "{{workflow.parameters.num_gpus}}"
-                  - name: concepts
-                    value: "{{workflow.parameters.concepts}}"
 
