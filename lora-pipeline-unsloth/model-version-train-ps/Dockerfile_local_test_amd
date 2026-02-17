@@ -14,3 +14,11 @@ RUN pip install --no-cache-dir --no-deps unsloth==2025.7.8 unsloth_zoo==2025.7.1
 
 COPY --link=true 1 /home/nonroot/main/1
 COPY --link=true requirements.txt config.yaml /home/nonroot/main/
+
+WORKDIR /home/nonroot/main
+
+ENV CLARIFAI_PAT=${CLARIFAI_PAT} \
+    PYTHONPATH=/home/nonroot/main
+
+# Keep container running for manual testing
+CMD ["tail", "-f", "/dev/null"]

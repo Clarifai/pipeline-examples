@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1.13-labs
+# Build context: model-version-train-ps/1/
+# docker build -f models/model/Dockerfile_local_test_amd -t model-serve-test-amd .
+FROM --platform=linux/amd64 vllm/vllm-openai:v0.15.1 as final
+
+COPY --link models/model/requiremen.txt /home/nonroot/requirements.txt
+
+# vllm base image bundles torch + CUDA. Install remaining deps on top.
+RUN ["pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
+RUN ["pip", "show", "--no-cache-dir", "clarifai"]
+
+ENV NUMBA_CACHE_DIR=/tmp/numba_cache \
+    TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_cache \
+    HOME=/tmp \
+    USER=nonroot \
+    DEBIAN_FRONTEND=noninteractive
+
+# Create checkpoint cache directory with correct permissions
+COPY --chown=nonroot:nonroot models/model/downloader/unused.yaml /home/nonroot/main/1/checkpoints/.cache/unused.yaml
+
+# Download checkpoints if config.yaml has checkpoints.when = "build"
+COPY --link=true models/model/config.yaml /home/nonroot/main/
+RUN ["python3", "-m", "clarifai.cli", "model", "download-checkpoints", "/home/nonroot/main", "--out_path", "/home/nonroot/main/1/checkpoints", "--stage", "build"]
+
+# Copy model code, config, and requirements
+COPY --link=true models/model/1 /home/nonroot/main/1
+COPY --link=true models/model/requiremen.txt models/model/config.yaml /home/nonroot/main/
+
+# Copy test script and set up models/model/1 structure expected by test_model.py
+COPY --link=true test_model.py /home/nonroot/main/
+RUN mkdir -p /home/nonroot/main/models/model && \
+    ln -s /home/nonroot/main/1 /home/nonroot/main/models/model/1 && \
+    cp /home/nonroot/main/models/model/config.yaml /home/nonroot/main/models/model/ 2>/dev/null || \
+    cp /home/nonroot/main/config.yaml /home/nonroot/main/models/model/
+
+WORKDIR /home/nonroot/main
+
+ENV PYTHONPATH=${PYTHONPATH}:/home/nonroot/main \
+    CLARIFAI_PAT=${CLARIFAI_PAT} \
+    CLARIFAI_USER_ID=${CLARIFAI_USER_ID} \
+    CLARIFAI_RUNNER_ID=${CLARIFAI_RUNNER_ID} \
+    CLARIFAI_NODEPOOL_ID=${CLARIFAI_NODEPOOL_ID} \
+    CLARIFAI_COMPUTE_CLUSTER_ID=${CLARIFAI_COMPUTE_CLUSTER_ID} \
+    CLARIFAI_API_BASE=${CLARIFAI_API_BASE:-https://api.clarifai.com}
+
+# Keep container running for manual testing (override ENTRYPOINT from base image)
+ENTRYPOINT []
+CMD ["tail", "-f", "/dev/null"]

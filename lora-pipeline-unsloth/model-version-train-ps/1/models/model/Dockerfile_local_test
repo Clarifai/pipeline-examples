@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.13-labs
+# Build context: model-version-train-ps/1/
+# docker build -f models/model/Dockerfile_local_test -t model-serve-test .
 FROM --platform=$TARGETPLATFORM vllm/vllm-openai:v0.15.1 as final
-COPY --link requiremen.txt /home/nonroot/requirements.txt
+
+COPY --link models/model/requiremen.txt /home/nonroot/requirements.txt
 
 # vllm base image bundles torch + CUDA. Install remaining deps on top.
 RUN ["pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
@@ -13,15 +16,24 @@ ENV NUMBA_CACHE_DIR=/tmp/numba_cache \
     DEBIAN_FRONTEND=noninteractive
 
 # Create checkpoint cache directory with correct permissions
-COPY --chown=nonroot:nonroot downloader/unused.yaml /home/nonroot/main/1/checkpoints/.cache/unused.yaml
+COPY --chown=nonroot:nonroot models/model/downloader/unused.yaml /home/nonroot/main/1/checkpoints/.cache/unused.yaml
 
 # Download checkpoints if config.yaml has checkpoints.when = "build"
-COPY --link=true config.yaml /home/nonroot/main/
+COPY --link=true models/model/config.yaml /home/nonroot/main/
 RUN ["python3", "-m", "clarifai.cli", "model", "download-checkpoints", "/home/nonroot/main", "--out_path", "/home/nonroot/main/1/checkpoints", "--stage", "build"]
 
 # Copy model code, config, and requirements
-COPY --link=true 1 /home/nonroot/main/1
-COPY --link=true requiremen.txt config.yaml /home/nonroot/main/
+COPY --link=true models/model/1 /home/nonroot/main/1
+COPY --link=true models/model/requiremen.txt models/model/config.yaml /home/nonroot/main/
+
+# Copy test script and set up models/model/1 structure expected by test_model.py
+COPY --link=true test_model.py /home/nonroot/main/
+RUN mkdir -p /home/nonroot/main/models/model && \
+    ln -s /home/nonroot/main/1 /home/nonroot/main/models/model/1 && \
+    cp /home/nonroot/main/models/model/config.yaml /home/nonroot/main/models/model/ 2>/dev/null || \
+    cp /home/nonroot/main/config.yaml /home/nonroot/main/models/model/
+
+WORKDIR /home/nonroot/main
 
 ENV PYTHONPATH=${PYTHONPATH}:/home/nonroot/main \
     CLARIFAI_PAT=${CLARIFAI_PAT} \
@@ -31,5 +43,6 @@ ENV PYTHONPATH=${PYTHONPATH}:/home/nonroot/main \
     CLARIFAI_COMPUTE_CLUSTER_ID=${CLARIFAI_COMPUTE_CLUSTER_ID} \
     CLARIFAI_API_BASE=${CLARIFAI_API_BASE:-https://api.clarifai.com}
 
-ENTRYPOINT ["python3", "-m", "clarifai.runners.server"]
-CMD ["--model_path", "/home/nonroot/main"]
+# Keep container running for manual testing (override ENTRYPOINT from base image)
+ENTRYPOINT []
+CMD ["tail", "-f", "/dev/null"]
