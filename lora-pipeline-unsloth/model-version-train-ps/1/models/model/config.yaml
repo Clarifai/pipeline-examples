@@ -1,5 +1,5 @@
 model:
-  id: test_qwen_30b_model
+  id: test_qwen_06b_model
   user_id: christine_yu
   app_id: test_lora_pipeline_app
   model_type_id: text-to-text
@@ -7,13 +7,13 @@ build_info:
   python_version: '3.11'
 inference_compute_info:
   cpu_limit: '6'
-  cpu_memory: 32Gi
+  cpu_memory: 8Gi
   num_accelerators: 1
   accelerator_type:
   - NVIDIA-*
-  accelerator_memory: 95Gi
+  accelerator_memory: 10Gi
 num_threads: 128
 checkpoints:
   type: huggingface
-  repo_id: unsloth/Qwen3-32B
+  repo_id: unsloth/Qwen3-0.6B
   when: runtime

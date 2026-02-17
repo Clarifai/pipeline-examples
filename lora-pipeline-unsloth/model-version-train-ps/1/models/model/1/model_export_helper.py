@@ -74,7 +74,8 @@ def copy_model_files_and_upload(
         model_dir = temp_dir / "lora_model"
 
         logger.info(f"Creating model package in: {model_dir}")
-        shutil.copytree(source_model_dir, model_dir)
+        shutil.copytree(source_model_dir, model_dir,
+                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*_lora'))
 
         # Handle naming conventions for Clarifai compatibility
         requirement_txt = model_dir / "requiremen.txt"
