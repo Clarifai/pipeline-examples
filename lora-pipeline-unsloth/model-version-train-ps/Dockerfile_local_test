@@ -1,43 +1,49 @@
-FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+# syntax=docker/dockerfile:1.13-labs
+# Build context: model-version-train-ps/
+# docker build --platform linux/arm64 -f Dockerfile_local_test -t lora-train-test .
+# docker run --gpus all --rm -d -e CLARIFAI_PAT=$CLARIFAI_PAT lora-train-test
+#
+# Exec in and run:
+#   docker exec -it <ctr> bash
+#   cd /home/nonroot/main && python 1/pipeline_step.py
+#
+# Base: nvcr.io/nvidia/pytorch:25.04-py3
+#   -> Python 3.12, torch 2.7.0 (NVIDIA patched), CUDA 12.8, native arm64/GH200
+FROM --platform=linux/arm64 nvcr.io/nvidia/pytorch:25.04-py3
 
-# Install Python 3.11 and build dependencies
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-dev \
-    python3-pip \
-    git \
-    build-essential \
-    ninja-build \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set CUDA environment variables for building extensions
-ENV CUDA_HOME=/usr/local/cuda \
+ENV TORCH_CUDA_ARCH_LIST="8.0;9.0;9.0a" \
+    CUDA_HOME=/usr/local/cuda \
     PATH=/usr/local/cuda/bin:$PATH \
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
-    TORCH_CUDA_ARCH_LIST="8.0;9.0"
+    XFORMERS_DISABLED=1 \
+    TORCHDYNAMO_DISABLE=1
 
-# Set python3.11 as default
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
-
-# Install PyTorch matching the working conda env (2.7.0+cu128)
-RUN pip install --no-cache-dir torch==2.7.0 torchvision --index-url https://download.pytorch.org/whl/cu128
+RUN apt-get update && apt-get install -y \
+    git ninja-build \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --link requirements.txt /home/nonroot/requirements.txt
-# Install requirements except unsloth first
-RUN grep -v "unsloth" /home/nonroot/requirements.txt > /tmp/requirements_no_unsloth.txt && \
-    pip install --no-cache-dir -r /tmp/requirements_no_unsloth.txt
-# Install unsloth without dependencies (to skip xformers), then install missing deps
-ENV XFORMERS_DISABLED=1
+
+# NGC pins pynvml==12.0.0 via PIP_CONSTRAINT; unset so our versions can install cleanly
+ENV PIP_CONSTRAINT=""
+
+# Install all deps except unsloth first (avoids pulling incompatible torch/xformers)
+RUN grep -v "^unsloth" /home/nonroot/requirements.txt > /tmp/req_no_unsloth.txt && \
+    pip install --no-cache-dir -r /tmp/req_no_unsloth.txt
+
+# Install unsloth + zoo without transitive deps
 RUN pip install --no-cache-dir --no-deps unsloth==2025.7.8 unsloth_zoo==2025.7.10
 
+# Copy in the actual files like config.yaml, requirements.txt, and most importantly 1/pipeline_step.py
 COPY --link=true 1 /home/nonroot/main/1
+# At this point we only need these for validation in the SDK.
 COPY --link=true requirements.txt config.yaml /home/nonroot/main/
+
+ENV PYTHONPATH=${PYTHONPATH}:/home/nonroot/main \
+    CLARIFAI_PAT=${CLARIFAI_PAT} \
+    CLARIFAI_API_BASE=${CLARIFAI_API_BASE:-https://api.clarifai.com}
 
 WORKDIR /home/nonroot/main
 
-ENV CLARIFAI_PAT=${CLARIFAI_PAT} \
-    PYTHONPATH=/home/nonroot/main
-
-# Keep container running for manual testing
+ENTRYPOINT []
 CMD ["tail", "-f", "/dev/null"]
