@@ -154,9 +154,13 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         logging.info("STEP 1: Loading base model with Unsloth")
         logging.info("=" * 80)
 
-        # Unsloth must be imported first to apply patches to transformers/peft
-        import unsloth  # noqa: F401,I001
+        # Pre-initialize CUDA context before unsloth patches it.
+        # Required on vGPU (AMD/GRID) where unsloth patches break first-time CUDA init.
         import torch
+        torch.zeros(1, device="cuda")
+        # Unsloth must be imported after CUDA is initialized on AMD, but still before
+        # transformers/peft to apply its patches correctly.
+        import unsloth  # noqa: F401,I001
         from unsloth import FastLanguageModel
         from unsloth.chat_templates import standardize_sharegpt
 
@@ -308,8 +312,10 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         if stage in ["build", "runtime"]:
             checkpoints = builder.download_checkpoints(stage=stage)
 
+        _enforce_eager_env = os.environ.get("VLLM_ENFORCE_EAGER", "")
+        _max_model_len_env = os.environ.get("VLLM_MAX_MODEL_LEN", "")
         server_args = {
-            'gpu_memory_utilization': 0.9,
+            'gpu_memory_utilization': float(os.environ.get("GPU_MEM_UTIL", "0.9")),
             'kv_cache_dtype': 'auto',
             'tensor_parallel_size': 1,
             'port': 23333,
@@ -317,6 +323,8 @@ class UnslothLoRAVLLM(OpenAIModelClass):
             'trust_remote_code': True,
             'enable_lora': True,
             'max_lora_rank': 64,
+            'enforce_eager': _enforce_eager_env.lower() in ("1", "true"),
+            'max_model_len': int(_max_model_len_env) if _max_model_len_env else None,
         }
 
         if os.path.isdir(lora_path):
