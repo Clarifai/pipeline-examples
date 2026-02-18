@@ -137,9 +137,8 @@ class UnslothLoRAVLLM(OpenAIModelClass):
               seed: int = 105,
               num_gpus: int = 1,
               ) -> str:
-        # Disable torch.compile/dynamo - cut_cross_entropy's backward pass uses
-        # torch.compile which can fail on certain platforms (e.g. aarch64 GH200).
-        os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+        # Uncomment to disable torch.compile/dynamo which can fail on certain platforms (e.g. aarch64 GH200).
+        # os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
 
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
@@ -312,10 +311,8 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         if stage in ["build", "runtime"]:
             checkpoints = builder.download_checkpoints(stage=stage)
 
-        _enforce_eager_env = os.environ.get("VLLM_ENFORCE_EAGER", "")
-        _max_model_len_env = os.environ.get("VLLM_MAX_MODEL_LEN", "")
         server_args = {
-            'gpu_memory_utilization': float(os.environ.get("GPU_MEM_UTIL", "0.9")),
+            'gpu_memory_utilization': 0.7,
             'kv_cache_dtype': 'auto',
             'tensor_parallel_size': 1,
             'port': 23333,
@@ -323,8 +320,8 @@ class UnslothLoRAVLLM(OpenAIModelClass):
             'trust_remote_code': True,
             'enable_lora': True,
             'max_lora_rank': 64,
-            'enforce_eager': _enforce_eager_env.lower() in ("1", "true"),
-            'max_model_len': int(_max_model_len_env) if _max_model_len_env else None,
+            'enforce_eager': False,
+            'max_model_len': 4096,
         }
 
         if os.path.isdir(lora_path):
