@@ -56,8 +56,6 @@ pipeline:
               value: 100
             - name: seed
               value: 105
-            - name: num_gpus
-              value: 1
         templates:
         - name: sequence
           steps:
@@ -109,5 +107,3 @@ pipeline:
                     value: "{{workflow.parameters.save_steps}}"
                   - name: seed
                     value: "{{workflow.parameters.seed}}"
-                  - name: num_gpus
-                    value: "{{workflow.parameters.num_gpus}}"

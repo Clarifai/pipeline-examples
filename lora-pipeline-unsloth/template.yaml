@@ -1,0 +1,117 @@
+name: lora-pipeline-unsloth
+description: LoRA fine-tuning pipeline using Unsloth for efficient LLM training with vLLM serving
+pipeline_template_type: TRAINING
+parameters:
+- name: user_id
+  type: STRING
+  required: true
+  description: Clarifai user
+  constraints:
+    string_constraints:
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+    data_source: clarifai.users.list
+- name: app_id
+  type: STRING
+  required: true
+  description: Clarifai application
+  constraints:
+    string_constraints:
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+    data_source: clarifai.apps.list
+- name: model_id
+  type: STRING
+  required: true
+  default_string: test_model
+  description: Unique identifier for the fine-tuned model
+  ui_hints:
+    widget: TEXT_INPUT
+- name: base_model_name
+  type: STRING
+  required: true
+  default_string: unsloth/Qwen3-32B
+  description: HuggingFace model ID for the base model to fine-tune
+  ui_hints:
+    widget: TEXT_INPUT
+- name: dataset_name
+  type: STRING
+  required: true
+  default_string: mlabonne/FineTome-100k
+  description: HuggingFace dataset ID for fine-tuning data
+  ui_hints:
+    widget: TEXT_INPUT
+- name: max_seq_length
+  type: INT
+  required: true
+  default_int: 2048
+  description: Maximum sequence length for training
+  constraints:
+    int_constraints:
+      min: 128
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: load_in_4bit
+  type: BOOL
+  required: true
+  default_bool: true
+  description: Use 4-bit quantization for base model weights
+  ui_hints:
+    widget: TOGGLE
+    serialize_as_string: true
+- name: lora_r
+  type: INT
+  required: true
+  default_int: 16
+  description: LoRA rank - higher values add more trainable parameters
+  constraints:
+    int_constraints:
+      min: 1
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: lora_alpha
+  type: INT
+  required: true
+  default_int: 16
+  description: LoRA scaling parameter
+  constraints:
+    int_constraints:
+      min: 1
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: num_epochs
+  type: INT
+  required: true
+  default_int: 1
+  description: Number of training epochs (used when max_steps=-1)
+  constraints:
+    int_constraints:
+      min: 1
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: batch_size
+  type: INT
+  required: true
+  default_int: 4
+  description: Per-device training batch size
+  constraints:
+    int_constraints:
+      min: 1
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: learning_rate
+  type: FLOAT
+  required: true
+  default_float: 0.0002
+  description: Peak learning rate for training
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: max_steps
+  type: INT
+  required: true
+  default_int: -1
+  description: Max training steps (-1 to use num_epochs instead)
+  ui_hints:
+    widget: NUMBER_INPUT
