@@ -39,16 +39,112 @@ parameters:
   ui_hints:
     widget: DROPDOWN
     data_source: clarifai.datasets.list
-- name: num_classes
+- name: concepts
+  type: STRING
+  required: true
+  default_string: '["beignets","hamburger","prime_rib","ramen"]'
+  description: JSON list of classification concepts
+  ui_hints:
+    widget: TEXT_INPUT
+- name: num_epochs
   type: INT
   required: true
-  default_int: 4
-  description: Number of classification categories
+  default_int: 200
+  description: Total training epochs
   constraints:
     int_constraints:
-      min: 2
+      min: 1
+      max: 1000
+  ui_hints:
+    widget: SLIDER
+- name: batch_size
+  type: INT
+  required: true
+  default_int: 64
+  description: Training batch size
+  constraints:
+    int_constraints:
+      min: 1
+      max: 256
+  ui_hints:
+    widget: SLIDER
+- name: image_size
+  type: INT
+  required: true
+  default_int: 224
+  description: Input image size (square)
+  constraints:
+    int_constraints:
+      min: 32
+      max: 1024
   ui_hints:
     widget: NUMBER_INPUT
+- name: per_item_lrate
+  type: FLOAT
+  required: true
+  default_float: 0.00001953125
+  description: Per-item learning rate
+  constraints:
+    float_constraints:
+      min: 0.0
+      max: 1.0
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: weight_decay
+  type: FLOAT
+  required: true
+  default_float: 0.01
+  description: Weight decay for optimizer
+  constraints:
+    float_constraints:
+      min: 0.0
+      max: 1.0
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: per_item_min_lrate
+  type: FLOAT
+  required: true
+  default_float: 1.5625e-8
+  description: Per-item minimum learning rate
+  constraints:
+    float_constraints:
+      min: 0.0
+      max: 1.0
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: warmup_iters
+  type: INT
+  required: true
+  default_int: 5
+  description: Number of warmup iterations
+  constraints:
+    int_constraints:
+      min: 0
+      max: 100
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: warmup_ratio
+  type: FLOAT
+  required: true
+  default_float: 0.0001
+  description: Warmup learning rate ratio
+  constraints:
+    float_constraints:
+      min: 0.0
+      max: 1.0
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: flip_probability
+  type: FLOAT
+  required: true
+  default_float: 0.5
+  description: Probability of flipping images
+  constraints:
+    float_constraints:
+      min: 0.0
+      max: 1.0
+  ui_hints:
+    widget: SLIDER
 - name: flip_direction
   type: STRING
   required: true
@@ -82,10 +178,14 @@ parameters:
       allow_free_text: false
   ui_hints:
     widget: DROPDOWN
-- name: concepts
-  type: STRING
+- name: seed
+  type: INT
   required: true
-  default_string: '[''beignets'',''hamburger'',''prime_rib'',''ramen'']'
-  description: JSON list of classification concepts
+  default_int: -1
+  description: Random seed to init training
+  constraints:
+    int_constraints:
+      min: -1
+      max: 999999
   ui_hints:
-    widget: TEXT_INPUT
+    widget: NUMBER_INPUT

@@ -39,6 +39,13 @@ parameters:
   ui_hints:
     widget: DROPDOWN
     data_source: clarifai.datasets.list
+- name: concepts
+  type: STRING
+  required: true
+  default_string: '["bird","cat"]'
+  description: JSON list of concepts to detect
+  ui_hints:
+    widget: TEXT_INPUT
 - name: seed
   type: INT
   required: true
@@ -47,18 +54,7 @@ parameters:
   constraints:
     int_constraints:
       min: -1
-      max: -1
-  ui_hints:
-    widget: NUMBER_INPUT
-- name: num_gpus
-  type: INT
-  required: true
-  default_int: 1
-  description: Number of gpus to train with
-  constraints:
-    int_constraints:
-      min: 1
-      max: 1
+      max: 999999
   ui_hints:
     widget: NUMBER_INPUT
 - name: image_size
@@ -109,10 +105,59 @@ parameters:
       max: 200
   ui_hints:
     widget: SLIDER
-- name: concepts
+- name: min_samples_per_epoch
+  type: INT
+  required: true
+  default_int: 300
+  description: Minimum samples per epoch
+  constraints:
+    int_constraints:
+      min: 1
+      max: 10000
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: per_item_lrate
+  type: FLOAT
+  required: true
+  default_float: 0.001875
+  description: Per-item learning rate
+  constraints:
+    float_constraints:
+      min: 0.0
+      max: 1.0
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: pretrained_weights
   type: STRING
   required: true
-  default_string: '[''bird'',''cat'']'
-  description: JSON list of concepts to detect
+  default_string: coco
+  description: Pretrained weights source
+  constraints:
+    string_constraints:
+      allowed_values:
+      - coco
+      allow_free_text: false
   ui_hints:
-    widget: TEXT_INPUT
+    widget: DROPDOWN
+- name: frozen_stages
+  type: INT
+  required: true
+  default_int: 1
+  description: Number of frozen backbone stages
+  constraints:
+    int_constraints:
+      min: -1
+      max: 4
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: inference_max_batch_size
+  type: INT
+  required: true
+  default_int: 2
+  description: Maximum batch size for inference
+  constraints:
+    int_constraints:
+      min: 1
+      max: 32
+  ui_hints:
+    widget: NUMBER_INPUT

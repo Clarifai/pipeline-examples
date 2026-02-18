@@ -119,7 +119,7 @@ class MMDetectionYoloF(VisualDetectorClass):
                 'artifact_id': 'mmdetectionyolof-coco',
                 'user_id': 'clarifai',
                 'app_id': 'train_pipelines',
-                'version_id': '62fe86f9387247efa8649e57d7ddea6b',
+                'version_id': '49af9f5f2c604198964f688ff18bd463',
                 'filename': 'yolof_r50_c5_8x8_1x_coco_20210425_024427-8e864411.pth'
             }
         }
