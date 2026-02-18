@@ -135,7 +135,6 @@ class UnslothLoRAVLLM(OpenAIModelClass):
               logging_steps: int = 10,
               save_steps: int = 100,
               seed: int = 105,
-              num_gpus: int = 1,
               ) -> str:
         # Uncomment to disable torch.compile/dynamo which can fail on certain platforms (e.g. aarch64 GH200).
         # os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")

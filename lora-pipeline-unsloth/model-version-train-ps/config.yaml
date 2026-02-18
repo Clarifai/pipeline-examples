@@ -57,5 +57,3 @@ pipeline_step_input_params:
     description: "Save checkpoint every N steps"
   - name: seed
     description: "Random seed"
-  - name: num_gpus
-    description: "Number of GPUs to use"
