@@ -11,8 +11,8 @@ pipeline_step_compute_info:
   cpu_limit: "4000m"
   cpu_memory: "16Gi"
   num_accelerators: 1
-  accelerator_memory: "80Gi"
-  accelerator_type: ["NVIDIA-GH200", "NVIDIA-A100-SXM4-80GB", "NVIDIA-H100-80GB-HBM3", "NVIDIA-*"]
+  accelerator_memory: "10Gi"
+  accelerator_type: ["NVIDIA-*"]
 
 pipeline_step_input_params:
   - name: user_id
