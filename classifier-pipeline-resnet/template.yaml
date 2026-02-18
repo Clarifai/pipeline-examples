@@ -1,0 +1,91 @@
+name: classifier-pipeline-resnet
+description: ResNet-based image classification training pipeline
+pipeline_template_type: TRAINING
+parameters:
+- name: user_id
+  type: STRING
+  required: true
+  description: Clarifai user
+  constraints:
+    string_constraints:
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+    data_source: clarifai.users.list
+- name: app_id
+  type: STRING
+  required: true
+  description: Clarifai application
+  constraints:
+    string_constraints:
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+    data_source: clarifai.apps.list
+- name: model_id
+  type: STRING
+  required: true
+  default_string: test_model
+  description: Unique identifier for the classifier model being trained
+  ui_hints:
+    widget: TEXT_INPUT
+- name: dataset_id
+  type: STRING
+  required: true
+  description: Clarifai dataset ID containing the training data
+  constraints:
+    string_constraints:
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+    data_source: clarifai.datasets.list
+- name: num_classes
+  type: INT
+  required: true
+  default_int: 4
+  description: Number of classification categories
+  constraints:
+    int_constraints:
+      min: 2
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: flip_direction
+  type: STRING
+  required: true
+  default_string: horizontal
+  description: Direction to randomly flip images
+  constraints:
+    string_constraints:
+      allowed_values:
+      - horizontal
+      - vertical
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+- name: concepts_mutually_exclusive
+  type: BOOL
+  required: true
+  default_bool: false
+  description: Whether concepts are mutually exclusive
+  ui_hints:
+    widget: TOGGLE
+    serialize_as_string: true
+- name: pretrained_weights
+  type: STRING
+  required: true
+  default_string: ImageNet-1k
+  description: Pretrained weights source
+  constraints:
+    string_constraints:
+      allowed_values:
+      - ImageNet-1k
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+- name: concepts
+  type: STRING
+  required: true
+  default_string: '[''beignets'',''hamburger'',''prime_rib'',''ramen'']'
+  description: JSON list of classification concepts
+  ui_hints:
+    widget: TEXT_INPUT
