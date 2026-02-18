@@ -3,7 +3,7 @@
 # docker build -f Dockerfil -t lora-serve .
 FROM --platform=$TARGETPLATFORM vllm/vllm-openai:v0.15.1 as final
 
-COPY --link requiremen.txt /home/nonroot/requirements.txt
+COPY --link requirements.txt /home/nonroot/requirements.txt
 
 # vllm base image bundles vllm, torch, CUDA. Install remaining deps on top.
 RUN ["pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
@@ -23,7 +23,7 @@ RUN ["python3", "-m", "clarifai.cli", "model", "download-checkpoints", "/home/no
 
 # Copy model code, config, and requirements
 COPY --link=true 1 /home/nonroot/main/1
-COPY --link=true requiremen.txt config.yaml /home/nonroot/main/
+COPY --link=true requirements.txt config.yaml /home/nonroot/main/
 
 ENV PYTHONPATH=${PYTHONPATH}:/home/nonroot/main \
     CLARIFAI_PAT=${CLARIFAI_PAT} \
