@@ -4,7 +4,7 @@
 #
 # Base: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 #   -> Python 3.11, torch 2.5.1, CUDA 12.4, x86_64/amd64
-FROM --platform=$TARGETPLATFORM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM --platform=linux/amd64 pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
 ENV TORCH_CUDA_ARCH_LIST="8.0;8.6" \
     CUDA_HOME=/usr/local/cuda \
