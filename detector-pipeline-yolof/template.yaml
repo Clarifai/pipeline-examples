@@ -136,6 +136,7 @@ parameters:
     string_constraints:
       allowed_values:
       - coco
+      - None
       allow_free_text: false
   ui_hints:
     widget: DROPDOWN
@@ -146,7 +147,7 @@ parameters:
   description: Number of frozen backbone stages
   constraints:
     int_constraints:
-      min: -1
+      min: 1
       max: 4
   ui_hints:
     widget: NUMBER_INPUT

@@ -121,7 +121,7 @@ class MMClassificationResNet50(VisualClassifierClass):
 
         # Map pretrained_weights to checkpoint paths (similar to EfficientNet pattern)
         pretrained_weights_artifacts = {
-            '': None,  # No pretrained weights
+            'None': None,  # No pretrained weights
             'ImageNet-1k': {
                 'artifact_id': 'mmclassificationresnet50-imagenet-1k',
                 'user_id': 'clarifai',

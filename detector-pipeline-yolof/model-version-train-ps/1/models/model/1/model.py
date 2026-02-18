@@ -114,7 +114,7 @@ class MMDetectionYoloF(VisualDetectorClass):
 
         # Map pretrained_weights to checkpoint paths (similar to EfficientNet pattern)
         pretrained_weights_artifacts = {
-            '': None,  # No pretrained weights
+            'None': None,  # No pretrained weights
             'coco': {
                 'artifact_id': 'mmdetectionyolof-coco',
                 'user_id': 'clarifai',

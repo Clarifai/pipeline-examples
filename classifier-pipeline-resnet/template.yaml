@@ -175,6 +175,7 @@ parameters:
     string_constraints:
       allowed_values:
       - ImageNet-1k
+      - None
       allow_free_text: false
   ui_hints:
     widget: DROPDOWN
