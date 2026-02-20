@@ -1,0 +1,23 @@
+pipeline_step:
+  id: "gpu-profile-benchmark-ps"
+  user_id: "christine_yu"
+  app_id: "test_lora_pipeline_app"
+
+build_info:
+  python_version: "3.11"
+  platform: 'linux/amd64,linux/arm64'
+
+pipeline_step_compute_info:
+  cpu_limit: "4000m"
+  cpu_memory: "16Gi"
+  num_accelerators: 1
+  accelerator_memory: "10Gi"
+  accelerator_type: ["NVIDIA-*"]
+
+pipeline_step_input_params:
+  - name: user_id
+    description: "User ID for artifact upload"
+  - name: app_id
+    description: "App ID for artifact upload"
+  - name: n_warmup_requests
+    description: "Number of warmup inference requests for GPU memory benchmarking"

@@ -1,0 +1,37 @@
+pipeline:
+  id: "benchmark-profile-gpu"
+  user_id: "christine_yu"
+  app_id: "test_lora_pipeline_app"
+  step_directories:
+    - gpu-profile-benchmark-ps
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: benchmark-profile-gpu
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: user_id
+              value: "christine_yu"
+            - name: app_id
+              value: "test_lora_pipeline_app"
+            - name: n_warmup_requests
+              value: 5
+        templates:
+        - name: sequence
+          steps:
+          - - name: gpu-profile-benchmark-ps-name
+              templateRef:
+                name: users/christine_yu/apps/test_lora_pipeline_app/pipeline_steps/gpu-profile-benchmark-ps
+                template: users/christine_yu/apps/test_lora_pipeline_app/pipeline_steps/gpu-profile-benchmark-ps
+              arguments:
+                parameters:
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: n_warmup_requests
+                    value: "{{workflow.parameters.n_warmup_requests}}"
