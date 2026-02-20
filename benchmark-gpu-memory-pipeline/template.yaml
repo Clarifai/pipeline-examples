@@ -1,0 +1,36 @@
+name: benchmark-profile-gpu-pipeline
+description: Benchmark GPU memory profile for a vLLM serving model
+pipeline_template_type: EVALUATION
+parameters:
+- name: user_id
+  type: STRING
+  required: true
+  default_string: christine_yu
+  description: Clarifai user
+  constraints:
+    string_constraints:
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+    data_source: clarifai.users.list
+- name: app_id
+  type: STRING
+  required: true
+  default_string: test_lora_pipeline_app
+  description: Clarifai application
+  constraints:
+    string_constraints:
+      allow_free_text: false
+  ui_hints:
+    widget: DROPDOWN
+    data_source: clarifai.apps.list
+- name: n_warmup_requests
+  type: INT
+  required: true
+  default_int: 5
+  description: Number of warmup inference requests for GPU memory benchmarking
+  constraints:
+    int_constraints:
+      min: 1
+  ui_hints:
+    widget: NUMBER_INPUT

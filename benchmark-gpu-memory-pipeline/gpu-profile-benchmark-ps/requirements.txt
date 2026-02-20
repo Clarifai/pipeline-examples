@@ -1,0 +1,8 @@
+# Benchmark pipeline step requirements
+# Same base as models/model/requirements.txt — vllm/vllm-openai:v0.15.1 bundles vllm, torch, CUDA.
+clarifai==12.1.7
+openai==2.20.0
+hf-transfer==0.1.9
+PyYAML==6.0.3
+pynvml==13.0.1
+psutil>=5.9.0

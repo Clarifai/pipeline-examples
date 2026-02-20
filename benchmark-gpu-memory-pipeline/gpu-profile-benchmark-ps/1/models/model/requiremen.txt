@@ -1,0 +1,11 @@
+# Serving requirements for vLLM inference + benchmark
+# ------------------------------------------------
+# Docker: use vllm/vllm-openai:v0.15.1 base image (bundles vllm, torch, CUDA).
+#         Only the packages below need to be pip-installed on top.
+# ------------------------------------------------
+clarifai==12.1.7
+openai==2.20.0
+hf-transfer==0.1.9
+PyYAML==6.0.3
+pynvml==13.0.1
+psutil>=5.9.0

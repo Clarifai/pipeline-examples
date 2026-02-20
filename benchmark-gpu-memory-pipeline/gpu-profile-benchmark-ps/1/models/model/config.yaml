@@ -1,0 +1,19 @@
+build_info:
+  python_version: '3.11'
+checkpoints:
+  repo_id: unsloth/Qwen3-0.6B
+  type: huggingface
+  when: runtime
+inference_compute_info:
+  accelerator_memory: 10Gi
+  accelerator_type:
+  - NVIDIA-*
+  cpu_limit: '6'
+  cpu_memory: 8Gi
+  num_accelerators: 1
+model:
+  app_id: test_lora_pipeline_app
+  id: test_qwen_06b_model
+  model_type_id: text-to-text
+  user_id: christine_yu
+num_threads: 128
