@@ -5,7 +5,7 @@ parameters:
 - name: user_id
   type: STRING
   required: true
-  default_string: christine_yu
+  default_string: <YOUR_USER_ID>
   description: Clarifai user
   constraints:
     string_constraints:
@@ -16,7 +16,7 @@ parameters:
 - name: app_id
   type: STRING
   required: true
-  default_string: test_lora_pipeline_app
+  default_string: <YOUR_APP_ID>
   description: Clarifai application
   constraints:
     string_constraints:

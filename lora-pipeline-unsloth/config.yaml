@@ -19,7 +19,7 @@ pipeline:
             - name: app_id
               value: "<YOUR_APP_ID>"
             - name: model_id
-              value: "test_qwen_06b_model"
+              value: "<YOUR_MODEL_ID>"
             - name: base_model_name
               value: "unsloth/Qwen3-0.6B"
             - name: dataset_name
@@ -49,7 +49,7 @@ pipeline:
             - name: weight_decay
               value: 0.01
             - name: max_steps
-              value: 5
+              value: -1
             - name: logging_steps
               value: 10
             - name: save_steps

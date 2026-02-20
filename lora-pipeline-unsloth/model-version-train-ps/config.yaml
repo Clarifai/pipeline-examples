@@ -8,8 +8,8 @@ build_info:
   platform: 'linux/amd64,linux/arm64'
 
 pipeline_step_compute_info:
-  cpu_limit: "4000m"
-  cpu_memory: "16Gi"
+  cpu_limit: '8'
+  cpu_memory: '10Gi'
   num_accelerators: 1
   accelerator_memory: "10Gi"
   accelerator_type: ["NVIDIA-*"]
