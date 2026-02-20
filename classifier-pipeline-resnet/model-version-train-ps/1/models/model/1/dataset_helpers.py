@@ -322,7 +322,7 @@ def convert_dataset_to_imagenet_format(
 
 
 def create_classes_file(
-    dataset_name: str, output_dir: str, concepts: list = None
+dataset_name: str, output_dir: str, concepts: list = None
 ) -> str:
     logger.info("Creating classes.txt file...")
 

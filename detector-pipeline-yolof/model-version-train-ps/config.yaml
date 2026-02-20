@@ -23,10 +23,10 @@ pipeline_step_input_params:
     description: "Model ID"
   - name: dataset_id
     description: "Dataset ID"
+  - name: concepts
+    description: "List of class names as JSON array"
   - name: seed
     description: "Random seed (-1 for no seed)"
-  - name: num_gpus
-    description: "Number of GPUs to use"
   - name: image_size
     description: "Image size as JSON array (e.g., [512] for min side, or [height, width])"
   - name: max_aspect_ratio
@@ -40,16 +40,12 @@ pipeline_step_input_params:
   - name: min_samples_per_epoch
     description: "Minimum samples per epoch"
   - name: per_item_lrate
-    description: "Learning rate per item (overall LR = batch_size * num_gpus * per_item_lrate)"
+    description: "Learning rate per item (overall LR = batch_size * per_item_lrate)"
   - name: pretrained_weights
-    description: "Pretrained weights source (e.g., coco, None)"
+    description: "Pretrained weights source (e.g., coco)"
   - name: frozen_stages
     description: "Number of frozen backbone stages (0-4)"
   - name: inference_max_batch_size
     description: "Maximum batch size for inference benchmarking"
-  - name: is_cpu
-    description: "Whether to use CPU (0=GPU, 1=CPU)"
-  - name: concepts
-    description: "List of class names as JSON array"
 
 

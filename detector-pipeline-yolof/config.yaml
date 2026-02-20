@@ -22,10 +22,10 @@ pipeline:
               value: "test_detector"
             - name: dataset_id
               value: "<YOUR_DATASET_ID>"
+            - name: concepts
+              value: '["bird","cat"]'
             - name: seed
               value: -1
-            - name: num_gpus
-              value: 1
             - name: image_size
               value: "[512]"
             - name: max_aspect_ratio
@@ -46,10 +46,6 @@ pipeline:
               value: 1
             - name: inference_max_batch_size
               value: 2
-            - name: is_cpu
-              value: 0
-            - name: concepts
-              value: '["bird","cat"]'
         templates:
         - name: sequence
           steps:
@@ -67,10 +63,10 @@ pipeline:
                     value: "{{workflow.parameters.model_id}}"
                   - name: dataset_id
                     value: "{{workflow.parameters.dataset_id}}"
+                  - name: concepts
+                    value: "{{workflow.parameters.concepts}}"
                   - name: seed
                     value: "{{workflow.parameters.seed}}"
-                  - name: num_gpus
-                    value: "{{workflow.parameters.num_gpus}}"
                   - name: image_size
                     value: "{{workflow.parameters.image_size}}"
                   - name: max_aspect_ratio
@@ -91,8 +87,4 @@ pipeline:
                     value: "{{workflow.parameters.frozen_stages}}"
                   - name: inference_max_batch_size
                     value: "{{workflow.parameters.inference_max_batch_size}}"
-                  - name: is_cpu
-                    value: "{{workflow.parameters.is_cpu}}"
-                  - name: concepts
-                    value: "{{workflow.parameters.concepts}}"
 

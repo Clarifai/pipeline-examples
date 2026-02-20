@@ -87,8 +87,8 @@ class MMClassificationResNet50(VisualClassifierClass):
               app_id: str = "YOUR_APP_ID",
               model_id: str = "test_model",
               dataset_id: str = "YOUR_DATASET_ID",
+              concepts: str = '["beignets","hamburger","prime_rib","ramen"]',
               # Training hyperparameters with defaults
-              num_classes: int = 4,
               num_epochs: int = 200,
               batch_size: int = 64,
               image_size: int = 224,
@@ -102,9 +102,6 @@ class MMClassificationResNet50(VisualClassifierClass):
               concepts_mutually_exclusive: bool = False,
               pretrained_weights: str = "ImageNet-1k",
               seed: int = -1,
-              is_cpu: int = 0,
-              num_gpus: int = 1,
-              concepts: str = '["beignets","hamburger","prime_rib","ramen"]'
               ) -> str:
         # Get PAT from environment
         pat = os.getenv("CLARIFAI_PAT")
@@ -118,30 +115,40 @@ class MMClassificationResNet50(VisualClassifierClass):
 
         logging.info("Starting MMClassification ResNet-50 training pipeline")
 
+        # Hardcode is_cpu and num_gpus
+        is_cpu = 0
+        num_gpus = 1
+
+        # Map pretrained_weights to checkpoint paths (similar to EfficientNet pattern)
         pretrained_weights_artifacts = {
+            'None': None,  # No pretrained weights
             'ImageNet-1k': {
                 'artifact_id': 'mmclassificationresnet50-imagenet-1k',
                 'user_id': 'clarifai',
                 'app_id': 'train_pipelines',
-                'version_id': '4b99f603aa26408185ec9be658e0d0cf',
+                'version_id': '91b08c5cd505452a80c5a8c54c59e4c2',
                 'filename': 'resnet50_8xb256-rsb-a1-600e_in1k_20211228-20e21305.pth'
             }
         }
 
-        artifact_info = pretrained_weights_artifacts[pretrained_weights]
-        checkpoint_dir = "/tmp/pretrain_checkpoints"
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_path = os.path.join(checkpoint_dir, artifact_info['filename'])
-        version = ArtifactVersion()
-        checkpoint_root = version.download(
-            artifact_id=artifact_info['artifact_id'],
-            user_id=artifact_info['user_id'],
-            app_id=artifact_info['app_id'],
-            version_id=artifact_info['version_id'],
-            output_path=checkpoint_path,
-            force=True,
-        )
-        logging.info(f"Downloaded checkpoint to {checkpoint_root}")
+        artifact_info = pretrained_weights_artifacts.get(pretrained_weights)
+        if artifact_info is not None:
+            checkpoint_dir = "/tmp/pretrain_checkpoints"
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint_path = os.path.join(checkpoint_dir, artifact_info['filename'])
+            version = ArtifactVersion()
+            checkpoint_root = version.download(
+                artifact_id=artifact_info['artifact_id'],
+                user_id=artifact_info['user_id'],
+                app_id=artifact_info['app_id'],
+                version_id=artifact_info['version_id'],
+                output_path=checkpoint_path,
+                force=True,
+            )
+            logging.info(f"Downloaded checkpoint to {checkpoint_root}")
+        else:
+            checkpoint_root = ''
+            logging.info("Training from scratch (no pretrained weights)")
 
         # STEP 1: Download Dataset from Clarifai API
         logging.info("")
@@ -187,16 +194,15 @@ class MMClassificationResNet50(VisualClassifierClass):
         )
         logging.info(f"Classes file: {classes_path}")
 
-        if classes_path and os.path.exists(classes_path):
-            with open(classes_path, 'r') as f:
-                dataset_classes = [line.strip() for line in f if line.strip()]
-            num_classes = len(dataset_classes)
-            concepts = dataset_classes
-            logging.info(f"Using {len(dataset_classes)} classes from dataset: {dataset_classes}")
+        with open(classes_path, 'r') as f:
+            dataset_classes = [line.strip() for line in f if line.strip()]
+        num_classes = len(dataset_classes)
+        concepts = dataset_classes
+        logging.info(f"Using {len(dataset_classes)} classes from dataset: {dataset_classes}")
 
         self.seed = seed
-        self.is_cpu = is_cpu
-        self.num_gpus = 0 if self.is_cpu else num_gpus
+        self.is_cpu = is_cpu  # Hardcoded to 0
+        self.num_gpus = num_gpus  # Hardcoded to 1
         self.image_size = image_size
         self.batch_size = batch_size
         self.num_epochs = num_epochs
