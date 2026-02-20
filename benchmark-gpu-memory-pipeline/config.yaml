@@ -1,7 +1,7 @@
 pipeline:
   id: "benchmark-profile-gpu"
-  user_id: "christine_yu"
-  app_id: "test_lora_pipeline_app"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
   step_directories:
     - gpu-profile-benchmark-ps
   orchestration_spec:
@@ -15,9 +15,9 @@ pipeline:
         arguments:
           parameters:
             - name: user_id
-              value: "christine_yu"
+              value: "<YOUR_USER_ID>"
             - name: app_id
-              value: "test_lora_pipeline_app"
+              value: "<YOUR_APP_ID>"
             - name: n_warmup_requests
               value: 5
         templates:
@@ -25,8 +25,8 @@ pipeline:
           steps:
           - - name: gpu-profile-benchmark-ps-name
               templateRef:
-                name: users/christine_yu/apps/test_lora_pipeline_app/pipeline_steps/gpu-profile-benchmark-ps
-                template: users/christine_yu/apps/test_lora_pipeline_app/pipeline_steps/gpu-profile-benchmark-ps
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/gpu-profile-benchmark-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/gpu-profile-benchmark-ps
               arguments:
                 parameters:
                   - name: user_id

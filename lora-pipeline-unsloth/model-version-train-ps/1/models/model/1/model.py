@@ -114,9 +114,9 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         return parser
     
     def train(self,
-              user_id: str = "christine_yu",
-              app_id: str = "test_lora_pipeline_app",
-              model_id: str = "test_qwen_06b_model",
+              user_id: str = "<YOUR_USER_ID>",
+              app_id: str = "<YOUR_APP_ID>",
+              model_id: str = "<YOUR_MODEL_ID>",
               base_model_name: str = "unsloth/Qwen3-0.6B",
               dataset_name: str = "mlabonne/FineTome-100k",
               max_seq_length: int = 2048,
@@ -131,7 +131,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
               lr_scheduler_type: str = "cosine",
               warmup_ratio: float = 0.06,
               weight_decay: float = 0.01,
-              max_steps: int = 5, # default -1
+              max_steps: int = -1,
               logging_steps: int = 10,
               save_steps: int = 100,
               seed: int = 105,
@@ -337,7 +337,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
     def predict(self,
                 prompt: str,
                 chat_history: List[dict] = None,
-                max_tokens: int = Param(default=512, description="Maximum tokens to generate."),
+                max_tokens: int = Param(default=2048, description="Maximum tokens to generate."),
                 temperature: float = Param(default=0.7, description="Sampling temperature."),
                 top_p: float = Param(default=0.95, description="Top-p sampling threshold."),
                 ) -> str:
@@ -353,7 +353,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
     def generate(self,
                  prompt: str,
                  chat_history: List[dict] = None,
-                 max_tokens: int = Param(default=512, description="Maximum tokens to generate."),
+                 max_tokens: int = Param(default=2048, description="Maximum tokens to generate."),
                  temperature: float = Param(default=0.7, description="Sampling temperature."),
                  top_p: float = Param(default=0.95, description="Top-p sampling threshold."),
                  ) -> Iterator[str]:

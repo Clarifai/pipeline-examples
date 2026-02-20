@@ -25,14 +25,14 @@ parameters:
 - name: model_id
   type: STRING
   required: true
-  default_string: test_model
+  default_string: <YOUR_MODEL_ID>
   description: Unique identifier for the fine-tuned model
   ui_hints:
     widget: TEXT_INPUT
 - name: base_model_name
   type: STRING
   required: true
-  default_string: unsloth/Qwen3-32B
+  default_string: unsloth/Qwen3-0.6B
   description: HuggingFace model ID for the base model to fine-tune
   ui_hints:
     widget: TEXT_INPUT
@@ -81,6 +81,13 @@ parameters:
       min: 1
   ui_hints:
     widget: NUMBER_INPUT
+- name: lora_dropout
+  type: FLOAT
+  required: true
+  default_float: 0.0
+  description: Dropout for LoRA layers
+  ui_hints:
+    widget: NUMBER_INPUT
 - name: num_epochs
   type: INT
   required: true
@@ -101,6 +108,16 @@ parameters:
       min: 1
   ui_hints:
     widget: NUMBER_INPUT
+- name: gradient_accumulation_steps
+  type: INT
+  required: true
+  default_int: 4
+  description: Gradient accumulation steps
+  constraints:
+    int_constraints:
+      min: 1
+  ui_hints:
+    widget: NUMBER_INPUT
 - name: learning_rate
   type: FLOAT
   required: true
@@ -108,10 +125,58 @@ parameters:
   description: Peak learning rate for training
   ui_hints:
     widget: NUMBER_INPUT
+- name: lr_scheduler_type
+  type: STRING
+  required: true
+  default_string: cosine
+  description: Learning rate scheduler type
+  ui_hints:
+    widget: TEXT_INPUT
+- name: warmup_ratio
+  type: FLOAT
+  required: true
+  default_float: 0.06
+  description: Warmup ratio
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: weight_decay
+  type: FLOAT
+  required: true
+  default_float: 0.01
+  description: Weight decay
+  ui_hints:
+    widget: NUMBER_INPUT
 - name: max_steps
   type: INT
   required: true
   default_int: -1
   description: Max training steps (-1 to use num_epochs instead)
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: logging_steps
+  type: INT
+  required: true
+  default_int: 10
+  description: Log every N steps
+  constraints:
+    int_constraints:
+      min: 1
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: save_steps
+  type: INT
+  required: true
+  default_int: 100
+  description: Save checkpoint every N steps
+  constraints:
+    int_constraints:
+      min: 1
+  ui_hints:
+    widget: NUMBER_INPUT
+- name: seed
+  type: INT
+  required: true
+  default_int: 105
+  description: Random seed
   ui_hints:
     widget: NUMBER_INPUT

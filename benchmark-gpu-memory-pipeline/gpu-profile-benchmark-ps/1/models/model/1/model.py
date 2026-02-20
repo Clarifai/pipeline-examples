@@ -109,7 +109,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
     def predict(self,
                 prompt: str,
                 chat_history: List[dict] = None,
-                max_tokens: int = Param(default=512, description="Maximum tokens to generate."),
+                max_tokens: int = Param(default=2048, description="Maximum tokens to generate."),
                 temperature: float = Param(default=0.7, description="Sampling temperature."),
                 top_p: float = Param(default=0.95, description="Top-p sampling threshold."),
                 ) -> str:
@@ -125,7 +125,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
     def generate(self,
                  prompt: str,
                  chat_history: List[dict] = None,
-                 max_tokens: int = Param(default=512, description="Maximum tokens to generate."),
+                 max_tokens: int = Param(default=2048, description="Maximum tokens to generate."),
                  temperature: float = Param(default=0.7, description="Sampling temperature."),
                  top_p: float = Param(default=0.95, description="Top-p sampling threshold."),
                  ) -> Iterator[str]:

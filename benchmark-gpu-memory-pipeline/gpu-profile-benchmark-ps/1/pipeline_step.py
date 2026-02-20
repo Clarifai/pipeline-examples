@@ -37,8 +37,8 @@ def upload_benchmark_artifact(result_path, user_id, app_id, artifact_id):
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark GPU memory for vLLM serving model")
-    parser.add_argument("--user_id", type=str, default="christine_yu")
-    parser.add_argument("--app_id", type=str, default="test_lora_pipeline_app")
+    parser.add_argument("--user_id", type=str, default="<YOUR_USER_ID>")
+    parser.add_argument("--app_id", type=str, default="<YOUR_APP_ID>")
     parser.add_argument("--n_warmup_requests", type=int, default=5)
     args = parser.parse_args()
 
