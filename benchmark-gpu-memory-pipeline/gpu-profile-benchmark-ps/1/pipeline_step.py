@@ -10,8 +10,6 @@ import signal
 import sys
 from pathlib import Path
 
-import yaml
-
 sys.path.insert(0, str(Path(__file__).parent / "models"))
 
 _mod = importlib.import_module("model.1.model")
@@ -66,11 +64,8 @@ def main():
             json.dump(result, f, indent=2)
         print(f"Saved to {result_path}")
 
-        model_config_path = Path(__file__).parent / "models" / "model" / "config.yaml"
-        with open(model_config_path) as f:
-            model_config = yaml.safe_load(f)
-        model_id = model_config.get("model", {}).get("id", "benchmark-model")
-        artifact_id = f"{model_id}_benchmark"
+        # Use simple artifact naming - no need to read model config
+        artifact_id = "vllm_gpu_benchmark"
 
         print(f"Uploading benchmark result as artifact '{artifact_id}'...")
         upload_benchmark_artifact(result_path, args.user_id, args.app_id, artifact_id)
