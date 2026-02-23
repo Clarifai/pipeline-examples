@@ -72,9 +72,9 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         builder = ModelBuilder(model_path, download_validation_only=True)
         model_config = builder.config
 
-        # LoRA adapter folder sits alongside model.py: 1/{model_id}_lora/
+        # LoRA adapter folder sits alongside model.py: 1/finetuned_lora/
         model_id = model_config.get("model", {}).get("id")
-        lora_path = os.path.join(os.path.dirname(__file__), f"{model_id}_lora")
+        lora_path = os.path.join(os.path.dirname(__file__), f"finetuned_lora")
 
         # Download base model checkpoints
         stage = model_config["checkpoints"]["when"]
