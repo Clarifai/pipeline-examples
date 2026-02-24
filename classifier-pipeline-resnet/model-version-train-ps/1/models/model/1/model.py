@@ -5,6 +5,7 @@ import tempfile
 import yaml
 import torch
 import inspect
+import zipfile
 from io import BytesIO
 from PIL import Image as PILImage
 from time import perf_counter_ns
@@ -18,11 +19,6 @@ from clarifai.runners.utils.data_types import Image, Concept
 from clarifai.client.artifact_version import ArtifactVersion
 
 try:
-    from .dataset_helpers import (
-        download_dataset,
-        convert_dataset_to_imagenet_format,
-        create_classes_file,
-    )
     from .benchmark_model_helper import benchmark_and_update_config
     from .model_export_helper import export_and_upload_classifier
 except ImportError:
@@ -31,11 +27,6 @@ except ImportError:
     model_dir = Path(__file__).parent
     if str(model_dir) not in sys.path:
         sys.path.insert(0, str(model_dir))
-    from dataset_helpers import (
-        download_dataset,
-        convert_dataset_to_imagenet_format,
-        create_classes_file,
-    )
     from benchmark_model_helper import benchmark_and_update_config
     from model_export_helper import export_and_upload_classifier
 
@@ -86,7 +77,6 @@ class MMClassificationResNet50(VisualClassifierClass):
               user_id: str = "YOUR_USER_ID",
               app_id: str = "YOUR_APP_ID",
               model_id: str = "test_model",
-              dataset_id: str = "YOUR_DATASET_ID",
               concepts: str = '["beignets","hamburger","prime_rib","ramen"]',
               # Training hyperparameters with defaults
               num_epochs: int = 200,
@@ -103,25 +93,21 @@ class MMClassificationResNet50(VisualClassifierClass):
               pretrained_weights: str = "ImageNet-1k",
               seed: int = -1,
               ) -> str:
-        # Get PAT from environment
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
 
-        # Convert concepts string to list
         concepts = json.loads(concepts)
 
         work_dir = "/tmp/mmpretrain_work_dir"
 
         logging.info("Starting MMClassification ResNet-50 training pipeline")
 
-        # Hardcode is_cpu and num_gpus
         is_cpu = 0
         num_gpus = 1
 
-        # Map pretrained_weights to checkpoint paths (similar to EfficientNet pattern)
         pretrained_weights_artifacts = {
-            'None': None,  # No pretrained weights
+            'None': None,
             'ImageNet-1k': {
                 'artifact_id': 'mmclassificationresnet50-imagenet-1k',
                 'user_id': 'clarifai',
@@ -150,48 +136,38 @@ class MMClassificationResNet50(VisualClassifierClass):
             checkpoint_root = ''
             logging.info("Training from scratch (no pretrained weights)")
 
-        # STEP 1: Download Dataset from Clarifai API
         logging.info("")
         logging.info("=" * 80)
-        logging.info("STEP 1: Downloading Dataset from Clarifai API")
+        logging.info("STEP 1: Downloading and Extracting Dataset")
         logging.info("=" * 80)
 
         os.makedirs(work_dir, exist_ok=True)
 
-        dataset_name = download_dataset(
-            user_id=user_id,
-            app_id=app_id,
-            dataset_id=dataset_id,
-            pat=pat,
-            output_dir=work_dir,
-            concepts=concepts,
+        # Default: example public dataset for demo, refactor for custom dataset
+        dataset_artifact = {
+            'artifact_id': 'mmclassificationresnet50-food101-dataset',
+            'user_id': 'clarifai',
+            'app_id': 'train_pipelines',
+            'version_id': '2b5788157a5447d9bd390d21a182a0b3',
+        }
+        dataset_zip_path = os.path.join(work_dir, "dataset.zip")
+        ArtifactVersion().download(
+            artifact_id=dataset_artifact['artifact_id'],
+            user_id=dataset_artifact['user_id'],
+            app_id=dataset_artifact['app_id'],
+            version_id=dataset_artifact['version_id'],
+            output_path=dataset_zip_path,
+            force=True,
         )
+        logging.info(f"Downloaded dataset to: {dataset_zip_path}")
 
-        logging.info(f"Dataset name: {dataset_name}")
+        with zipfile.ZipFile(dataset_zip_path, 'r') as zip_ref:
+            zip_ref.extractall(work_dir)
 
-        # STEP 2: Convert Dataset to ImageNet Format
-        logging.info("")
-        logging.info("=" * 80)
-        logging.info("STEP 2: Converting Dataset to ImageNet Format")
-        logging.info("=" * 80)
-
-        convert_output = convert_dataset_to_imagenet_format(
-            dataset_name=dataset_name,
-            dataset_split="train",
-            output_root=work_dir,
-        )
-
-        images_output_root = convert_output.images_output_root
-        annotations_path = convert_output.annotations_path
+        images_output_root = os.path.join(work_dir, "train")
+        classes_path = os.path.join(images_output_root, "classes.txt")
 
         logging.info(f"Images directory: {images_output_root}")
-        logging.info(f"Annotations file: {annotations_path}")
-
-        classes_path = create_classes_file(
-            dataset_name=dataset_name,
-            output_dir=images_output_root,
-            concepts=None,
-        )
         logging.info(f"Classes file: {classes_path}")
 
         with open(classes_path, 'r') as f:
@@ -398,7 +374,7 @@ model = dict(
     data_preprocessor=data_preprocessor)
 
 # Pretrained weights
-load_from = '{self.load_from}'
+load_from = {"'" + self.load_from + "'" if self.load_from else 'None'}
 
 # Optimizer
 optim_wrapper = dict(

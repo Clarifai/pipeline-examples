@@ -29,16 +29,6 @@ parameters:
   description: Unique identifier for the classifier model being trained
   ui_hints:
     widget: TEXT_INPUT
-- name: dataset_id
-  type: STRING
-  required: true
-  description: Clarifai dataset ID containing the training data
-  constraints:
-    string_constraints:
-      allow_free_text: false
-  ui_hints:
-    widget: DROPDOWN
-    data_source: clarifai.datasets.list
 - name: concepts
   type: STRING
   required: true
