@@ -77,19 +77,6 @@ def copy_model_files_and_upload(
         shutil.copytree(source_model_dir, model_dir,
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*_lora'))
 
-        # Handle naming conventions for Clarifai compatibility
-        requirement_txt = model_dir / "requiremen.txt"
-        requirements_txt = model_dir / "requirements.txt"
-        if requirement_txt.exists() and not requirements_txt.exists():
-            logger.info("Renaming requiremen.txt -> requirements.txt")
-            requirement_txt.rename(requirements_txt)
-
-        dockerfil = model_dir / "Dockerfil"
-        dockerfile = model_dir / "Dockerfile"
-        if dockerfil.exists() and not dockerfile.exists():
-            logger.info("Renaming Dockerfil -> Dockerfile")
-            dockerfil.rename(dockerfile)
-
         # Copy LoRA adapter files alongside model.py (e.g. 1/{model_id}_lora/)
         adapter_dest = model_dir / "1" / f"{model_id}_lora"
         shutil.copytree(adapter_path, adapter_dest)

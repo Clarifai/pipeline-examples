@@ -88,18 +88,6 @@ def copy_model_files_and_upload(
 
         shutil.copytree(source_model_dir, model_dir)
 
-        requirement_txt = model_dir / "requiremen.txt"
-        requirements_txt = model_dir / "requirements.txt"
-        if requirement_txt.exists() and not requirements_txt.exists():
-            logger.info("📝 Renaming requiremen.txt -> requirements.txt")
-            requirement_txt.rename(requirements_txt)
-
-        dockerfil = model_dir / "Dockerfil"
-        dockerfile = model_dir / "Dockerfile"
-        if dockerfil.exists() and not dockerfile.exists():
-            logger.info("📝 Renaming Dockerfil -> Dockerfile")
-            dockerfil.rename(dockerfile)
-
         model_files_path = model_dir / "1" / "model_files"
         model_files_path.mkdir(parents=True, exist_ok=True)
 

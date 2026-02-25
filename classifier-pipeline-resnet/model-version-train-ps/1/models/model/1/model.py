@@ -126,7 +126,7 @@ class MMClassificationResNet50(VisualClassifierClass):
                 'artifact_id': 'mmclassificationresnet50-imagenet-1k',
                 'user_id': 'clarifai',
                 'app_id': 'train_pipelines',
-                'version_id': '91b08c5cd505452a80c5a8c54c59e4c2',
+                'version_id': '41e1b22636e44bd8837a5777c8179ada',
                 'filename': 'resnet50_8xb256-rsb-a1-600e_in1k_20211228-20e21305.pth'
             }
         }
