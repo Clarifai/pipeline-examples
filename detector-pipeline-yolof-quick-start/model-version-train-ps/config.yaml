@@ -21,8 +21,6 @@ pipeline_step_input_params:
     description: "App ID"
   - name: model_id
     description: "Model ID"
-  - name: dataset_id
-    description: "Dataset ID"
   - name: concepts
     description: "List of class names as JSON array"
   - name: seed

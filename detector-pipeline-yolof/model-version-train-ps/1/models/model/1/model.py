@@ -6,7 +6,6 @@ import tempfile
 import yaml
 import torch
 import inspect
-import zipfile
 from io import BytesIO
 from PIL import Image as PILImage
 from time import perf_counter_ns
@@ -20,6 +19,11 @@ from clarifai.runners.utils.data_types import Image, Region, Concept
 from clarifai.client.artifact_version import ArtifactVersion
 
 try:
+    from .dataset_helpers import (
+        download_dataset,
+        convert_dataset_to_coco_format,
+        create_classes_file,
+    )
     from .benchmark_model_helper import benchmark_and_update_config
     from .model_export_helper import export_and_upload_detector
 except ImportError:
@@ -28,6 +32,11 @@ except ImportError:
     model_dir = Path(__file__).parent
     if str(model_dir) not in sys.path:
         sys.path.insert(0, str(model_dir))
+    from dataset_helpers import (
+        download_dataset,
+        convert_dataset_to_coco_format,
+        create_classes_file,
+    )
     from benchmark_model_helper import benchmark_and_update_config
     from model_export_helper import export_and_upload_detector
 
@@ -74,6 +83,7 @@ class MMDetectionYoloF(VisualDetectorClass):
               user_id: str = "YOUR_USER_ID",
               app_id: str = "YOUR_APP_ID",
               model_id: str = "test_detector",
+              dataset_id: str = "YOUR_DATASET_ID",
               concepts: str = '["bird","cat"]',
               seed: int = -1,
               image_size: str = "[512]",
@@ -98,16 +108,18 @@ class MMDetectionYoloF(VisualDetectorClass):
 
         logging.info("Starting MMDetection YOLOF training pipeline")
 
+        # Hardcode is_cpu and num_gpus
         is_cpu = 0
         num_gpus = 1
 
+        # Map pretrained_weights to checkpoint paths (similar to EfficientNet pattern)
         pretrained_weights_artifacts = {
-            'None': None,
+            'None': None,  # No pretrained weights
             'coco': {
                 'artifact_id': 'mmdetectionyolof-coco',
                 'user_id': 'clarifai',
                 'app_id': 'train_pipelines',
-                'version_id': 'efbbbe7f8c7743de9db5e85bba43af2a',
+                'version_id': '49af9f5f2c604198964f688ff18bd463',
                 'filename': 'yolof_r50_c5_8x8_1x_coco_20210425_024427-8e864411.pth'
             }
         }
@@ -133,45 +145,52 @@ class MMDetectionYoloF(VisualDetectorClass):
 
         logging.info("")
         logging.info("=" * 80)
-        logging.info("STEP 1: Downloading and Extracting Dataset")
+        logging.info("STEP 1: Downloading Dataset from Clarifai API")
         logging.info("=" * 80)
 
         os.makedirs(work_dir, exist_ok=True)
 
-        # Default: example public dataset for demo, refactor for custom dataset
-        dataset_artifact = {
-            'artifact_id': 'mmdetectionyolof-voc-dataset',
-            'user_id': 'clarifai',
-            'app_id': 'train_pipelines',
-            'version_id': '08c64f4529e3485baf0016aaca046b86',
-        }
-        dataset_zip_path = os.path.join(work_dir, "dataset.zip")
-        ArtifactVersion().download(
-            artifact_id=dataset_artifact['artifact_id'],
-            user_id=dataset_artifact['user_id'],
-            app_id=dataset_artifact['app_id'],
-            version_id=dataset_artifact['version_id'],
-            output_path=dataset_zip_path,
-            force=True,
+        dataset_name = download_dataset(
+            user_id=user_id,
+            app_id=app_id,
+            dataset_id=dataset_id,
+            pat=pat,
+            output_dir=work_dir,
+            concepts=concepts,
         )
-        logging.info(f"Downloaded dataset to: {dataset_zip_path}")
 
-        with zipfile.ZipFile(dataset_zip_path, 'r') as zip_ref:
-            zip_ref.extractall(work_dir)
+        logging.info(f"Dataset name: {dataset_name}")
 
-        images_output_root = os.path.join(work_dir, "train")
-        annotations_path = os.path.join(images_output_root, "annotations.json")
-        classes_path = os.path.join(images_output_root, "classes.txt")
+        logging.info("")
+        logging.info("=" * 80)
+        logging.info("STEP 2: Converting Dataset to COCO Format")
+        logging.info("=" * 80)
+
+        convert_output = convert_dataset_to_coco_format(
+            dataset_name=dataset_name,
+            dataset_split="train",
+            output_root=work_dir,
+        )
+
+        images_output_root = convert_output.images_output_root
+        annotations_path = convert_output.annotations_path
 
         logging.info(f"Images directory: {images_output_root}")
         logging.info(f"Annotations file: {annotations_path}")
+
+        classes_path = create_classes_file(
+            dataset_name=dataset_name,
+            output_dir=images_output_root,
+            concepts=None,
+        )
         logging.info(f"Classes file: {classes_path}")
 
-        with open(classes_path, 'r') as f:
-            dataset_classes = [line.strip() for line in f if line.strip()]
-        num_classes = len(dataset_classes)
-        concepts = dataset_classes
-        logging.info(f"Using {len(dataset_classes)} classes from dataset: {dataset_classes}")
+        if classes_path and os.path.exists(classes_path):
+            with open(classes_path, 'r') as f:
+                dataset_classes = [line.strip() for line in f if line.strip()]
+            num_classes = len(dataset_classes)
+            concepts = dataset_classes
+            logging.info(f"Using {len(dataset_classes)} classes from dataset: {dataset_classes}")
 
         self.seed = seed
         self.is_cpu = is_cpu  # Hardcoded to 0
@@ -471,7 +490,7 @@ visualizer = dict(
 log_processor = dict(type='LogProcessor', window_size=50, by_epoch=True)
 
 log_level = 'INFO'
-load_from = {"'" + self.load_from + "'" if self.load_from else 'None'}
+load_from = '{self.load_from}'
 resume = False
 
 # Launcher
