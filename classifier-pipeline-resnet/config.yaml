@@ -2,8 +2,6 @@ pipeline:
   id: "<YOUR_PIPELINE_ID>"
   user_id: "<YOUR_USER_ID>"
   app_id: "<YOUR_APP_ID>"
-  step_directories:
-    - model-version-train-ps
   orchestration_spec:
     argo_orchestration_spec: |
       apiVersion: argoproj.io/v1alpha1
@@ -53,10 +51,10 @@ pipeline:
         templates:
         - name: sequence
           steps:
-          - - name: model-version-train-ps-name
+          - - name: classifier-pipeline-resnet-ps-name
               templateRef:
-                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
-                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/3f42e83c9cee4bca9efa01280dc138e6
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/3f42e83c9cee4bca9efa01280dc138e6
               arguments:
                 parameters:
                   - name: user_id

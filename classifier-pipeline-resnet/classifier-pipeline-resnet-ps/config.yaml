@@ -1,7 +1,9 @@
 pipeline_step:
-  id: "model-version-train-ps"
-  user_id: "<YOUR_USER_ID>"
-  app_id: "<YOUR_APP_ID>"
+  id: "classifier-pipeline-resnet-ps"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  visibility:
+    gettable: PUBLIC
 
 build_info:
   python_version: "3.11"
@@ -13,7 +15,7 @@ pipeline_step_compute_info:
   num_accelerators: 1
   accelerator_memory: "16Gi"
   accelerator_type: ["NVIDIA-*"]
-  
+
 pipeline_step_input_params:
   - name: user_id
     description: "User ID"
@@ -51,5 +53,3 @@ pipeline_step_input_params:
     description: "Pretrained weights source (e.g., ImageNet-1k)"
   - name: seed
     description: "Random seed (-1 for no seed)"
-
-

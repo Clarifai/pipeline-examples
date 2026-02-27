@@ -1,7 +1,9 @@
 pipeline_step:
-  id: "model-version-train-ps"
-  user_id: "<YOUR_USER_ID>"
-  app_id: "<YOUR_APP_ID>"
+  id: "detector-pipeline-yolof-ps"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  visibility:
+    gettable: PUBLIC
 
 build_info:
   python_version: "3.11"
@@ -47,5 +49,3 @@ pipeline_step_input_params:
     description: "Number of frozen backbone stages (0-4)"
   - name: inference_max_batch_size
     description: "Maximum batch size for inference benchmarking"
-
-
