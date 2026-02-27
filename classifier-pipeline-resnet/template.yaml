@@ -39,6 +39,13 @@ parameters:
   ui_hints:
     widget: DROPDOWN
     data_source: clarifai.datasets.list
+- name: dataset_version_id
+  type: STRING
+  required: true
+  default_string: ''
+  description: Clarifai dataset version ID for reproducible training
+  ui_hints:
+    widget: TEXT_INPUT
 - name: concepts
   type: STRING
   required: true

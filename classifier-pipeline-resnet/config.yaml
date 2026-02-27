@@ -20,6 +20,8 @@ pipeline:
               value: "test_model"
             - name: dataset_id
               value: "<YOUR_DATASET_ID>"
+            - name: dataset_version_id
+              value: ""
             - name: concepts
               value: '["beignets","hamburger","prime_rib","ramen"]'
             - name: num_epochs
@@ -65,6 +67,8 @@ pipeline:
                     value: "{{workflow.parameters.model_id}}"
                   - name: dataset_id
                     value: "{{workflow.parameters.dataset_id}}"
+                  - name: dataset_version_id
+                    value: "{{workflow.parameters.dataset_version_id}}"
                   - name: concepts
                     value: "{{workflow.parameters.concepts}}"
                   - name: num_epochs
