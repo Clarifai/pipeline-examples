@@ -2,8 +2,6 @@ pipeline:
   id: "<YOUR_PIPELINE_ID>"
   user_id: "<YOUR_USER_ID>"
   app_id: "<YOUR_APP_ID>"
-  step_directories:
-    - model-version-train-ps
   orchestration_spec:
     argo_orchestration_spec: |
       apiVersion: argoproj.io/v1alpha1
@@ -49,10 +47,10 @@ pipeline:
         templates:
         - name: sequence
           steps:
-          - - name: model-version-train-ps-name
+          - - name: detector-pipeline-yolof-ps-name
               templateRef:
-                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
-                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/48b844abf7584525b1b8534217b9b3ba
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/48b844abf7584525b1b8534217b9b3ba
               arguments:
                 parameters:
                   - name: user_id
