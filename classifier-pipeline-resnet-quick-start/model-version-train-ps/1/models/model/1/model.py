@@ -77,7 +77,6 @@ class MMClassificationResNet50(VisualClassifierClass):
               user_id: str = "YOUR_USER_ID",
               app_id: str = "YOUR_APP_ID",
               model_id: str = "test_model",
-              concepts: str = '["beignets","hamburger","prime_rib","ramen"]',
               # Training hyperparameters with defaults
               num_epochs: int = 200,
               batch_size: int = 64,
@@ -96,8 +95,6 @@ class MMClassificationResNet50(VisualClassifierClass):
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
-
-        concepts = json.loads(concepts)
 
         work_dir = "/tmp/mmpretrain_work_dir"
 

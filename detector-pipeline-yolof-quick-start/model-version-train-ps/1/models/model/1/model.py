@@ -74,7 +74,6 @@ class MMDetectionYoloF(VisualDetectorClass):
               user_id: str = "YOUR_USER_ID",
               app_id: str = "YOUR_APP_ID",
               model_id: str = "test_detector",
-              concepts: str = '["bird","cat"]',
               seed: int = -1,
               image_size: str = "[512]",
               max_aspect_ratio: float = 1.5,
@@ -91,7 +90,6 @@ class MMDetectionYoloF(VisualDetectorClass):
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
 
-        concepts = json.loads(concepts)
         image_size_list = json.loads(image_size) if isinstance(image_size, str) else image_size
 
         work_dir = "/tmp/mmdetection_work_dir"

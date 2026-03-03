@@ -21,8 +21,6 @@ pipeline_step_input_params:
     description: "App ID"
   - name: model_id
     description: "Model ID"
-  - name: concepts
-    description: "List of class names as JSON array"
   - name: seed
     description: "Random seed (-1 for no seed)"
   - name: image_size

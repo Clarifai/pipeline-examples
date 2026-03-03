@@ -20,8 +20,6 @@ pipeline:
               value: "<YOUR_APP_ID>"
             - name: model_id
               value: "test_detector"
-            - name: concepts
-              value: '["bird","cat"]'
             - name: seed
               value: -1
             - name: image_size
@@ -59,8 +57,6 @@ pipeline:
                     value: "{{workflow.parameters.app_id}}"
                   - name: model_id
                     value: "{{workflow.parameters.model_id}}"
-                  - name: concepts
-                    value: "{{workflow.parameters.concepts}}"
                   - name: seed
                     value: "{{workflow.parameters.seed}}"
                   - name: image_size

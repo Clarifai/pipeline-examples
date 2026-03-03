@@ -21,8 +21,6 @@ pipeline_step_input_params:
     description: "App ID"
   - name: model_id
     description: "Model ID"
-  - name: concepts
-    description: "List of class names as JSON array"
   - name: num_epochs
     description: "Total number of training epochs"
   - name: batch_size
