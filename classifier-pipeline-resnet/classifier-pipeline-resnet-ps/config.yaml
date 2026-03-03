@@ -25,6 +25,8 @@ pipeline_step_input_params:
     description: "Model ID"
   - name: dataset_id
     description: "Dataset ID"
+  - name: dataset_version_id
+    description: "Dataset Version ID"
   - name: concepts
     description: "List of class names as JSON array"
   - name: num_epochs
