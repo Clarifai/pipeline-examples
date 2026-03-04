@@ -87,6 +87,7 @@ class MMClassificationResNet50(VisualClassifierClass):
               app_id: str = "YOUR_APP_ID",
               model_id: str = "test_model",
               dataset_id: str = "YOUR_DATASET_ID",
+              dataset_version_id: str = "",
               concepts: str = '["beignets","hamburger","prime_rib","ramen"]',
               # Training hyperparameters with defaults
               num_epochs: int = 200,
@@ -116,7 +117,9 @@ class MMClassificationResNet50(VisualClassifierClass):
         logging.info("Starting MMClassification ResNet-50 training pipeline")
 
         # Hardcode is_cpu and num_gpus
-        is_cpu = 0
+        # Set is_cpu=1 when CUDA not available to avoid multiprocessing hangs
+        import torch
+        is_cpu = 1 if not torch.cuda.is_available() else 0
         num_gpus = 1
 
         # Map pretrained_weights to checkpoint paths (similar to EfficientNet pattern)
@@ -162,6 +165,7 @@ class MMClassificationResNet50(VisualClassifierClass):
             user_id=user_id,
             app_id=app_id,
             dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
             pat=pat,
             output_dir=work_dir,
             concepts=concepts,

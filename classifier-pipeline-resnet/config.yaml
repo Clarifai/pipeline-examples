@@ -20,6 +20,8 @@ pipeline:
               value: "test_model"
             - name: dataset_id
               value: "<YOUR_DATASET_ID>"
+            - name: dataset_version_id
+              value: ""
             - name: concepts
               value: '["beignets","hamburger","prime_rib","ramen"]'
             - name: num_epochs
@@ -53,8 +55,8 @@ pipeline:
           steps:
           - - name: classifier-pipeline-resnet-ps-name
               templateRef:
-                name: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/3f42e83c9cee4bca9efa01280dc138e6
-                template: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/3f42e83c9cee4bca9efa01280dc138e6
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/a5e96fd09380450d86ae987f2071afb6
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/a5e96fd09380450d86ae987f2071afb6
               arguments:
                 parameters:
                   - name: user_id
@@ -65,6 +67,8 @@ pipeline:
                     value: "{{workflow.parameters.model_id}}"
                   - name: dataset_id
                     value: "{{workflow.parameters.dataset_id}}"
+                  - name: dataset_version_id
+                    value: "{{workflow.parameters.dataset_version_id}}"
                   - name: concepts
                     value: "{{workflow.parameters.concepts}}"
                   - name: num_epochs

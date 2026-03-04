@@ -20,6 +20,8 @@ pipeline:
               value: "test_detector"
             - name: dataset_id
               value: "<YOUR_DATASET_ID>"
+            - name: dataset_version_id
+              value: ""
             - name: concepts
               value: '["bird","cat"]'
             - name: seed
@@ -49,8 +51,8 @@ pipeline:
           steps:
           - - name: detector-pipeline-yolof-ps-name
               templateRef:
-                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/48b844abf7584525b1b8534217b9b3ba
-                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/48b844abf7584525b1b8534217b9b3ba
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/9a3d7dff8e944fe19b4a06b146046b6e
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/9a3d7dff8e944fe19b4a06b146046b6e
               arguments:
                 parameters:
                   - name: user_id
@@ -61,6 +63,8 @@ pipeline:
                     value: "{{workflow.parameters.model_id}}"
                   - name: dataset_id
                     value: "{{workflow.parameters.dataset_id}}"
+                  - name: dataset_version_id
+                    value: "{{workflow.parameters.dataset_version_id}}"
                   - name: concepts
                     value: "{{workflow.parameters.concepts}}"
                   - name: seed
