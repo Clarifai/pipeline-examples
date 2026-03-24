@@ -1,0 +1,80 @@
+# D-FINE Fine-tuning Pipeline
+# Adapted from: pipeline-examples/detector-pipeline-yolof-quick-start/config.yaml
+# Params match train() signature in model.py exactly.
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  step_directories:
+    - model-version-train-ps
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: <YOUR_PIPELINE_ID>
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: model_id
+              value: "dfine_detector"
+            - name: clarifai_dataset_id
+              value: "None"
+            - name: dataset_version_id
+              value: ""
+            - name: concepts
+              value: '["bird","cat"]'
+            - name: pretrained_model
+              value: "ustc-community/dfine-small-obj2coco"
+            - name: num_epochs
+              value: 200
+            - name: batch_size
+              value: 8
+            - name: learning_rate
+              value: 0.0004
+            - name: weight_decay
+              value: 0.0001
+            - name: warmup_steps
+              value: 500
+            - name: seed
+              value: -1
+        templates:
+        - name: sequence
+          steps:
+          - - name: model-version-train-ps-name
+              templateRef:
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+              arguments:
+                parameters:
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: model_id
+                    value: "{{workflow.parameters.model_id}}"
+                  - name: clarifai_dataset_id
+                    value: "{{workflow.parameters.clarifai_dataset_id}}"
+                  - name: dataset_version_id
+                    value: "{{workflow.parameters.dataset_version_id}}"
+                  - name: concepts
+                    value: "{{workflow.parameters.concepts}}"
+                  - name: pretrained_model
+                    value: "{{workflow.parameters.pretrained_model}}"
+                  - name: num_epochs
+                    value: "{{workflow.parameters.num_epochs}}"
+                  - name: batch_size
+                    value: "{{workflow.parameters.batch_size}}"
+                  - name: learning_rate
+                    value: "{{workflow.parameters.learning_rate}}"
+                  - name: weight_decay
+                    value: "{{workflow.parameters.weight_decay}}"
+                  - name: warmup_steps
+                    value: "{{workflow.parameters.warmup_steps}}"
+                  - name: seed
+                    value: "{{workflow.parameters.seed}}"
