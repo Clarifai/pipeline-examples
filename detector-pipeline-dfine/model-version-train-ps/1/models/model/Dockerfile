@@ -46,16 +46,6 @@ ENV PATH="/home/nonroot/.local/bin:$VIRTUAL_ENV/bin:$PATH"
 RUN ["uv", "pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
 RUN ["uv", "pip", "show", "--no-cache-dir", "clarifai"]
 
-# Fix duplicate health check bug in clarifai==12.2.1 (start_health_server_thread called twice)
-RUN python -c "\
-import pathlib, site; \
-p = pathlib.Path(site.getsitepackages()[0]) / 'clarifai/runners/models/model_runner.py'; \
-t = p.read_text(); \
-old = '        start_health_server_thread(port=health_check_port, address=\\x27\\x27)\n        if health_check_port is not None:\n            start_health_server_thread(port=health_check_port, address=\\x27\\x27)'; \
-new = '        if health_check_port is not None:\n            start_health_server_thread(port=health_check_port, address=\\x27\\x27)'; \
-p.write_text(t.replace(old, new)); \
-print('Patched duplicate health check call')"
-
 # Set the NUMBA cache dir to /tmp
 # Set the TORCHINDUCTOR cache dir to /tmp
 # The CLARIFAI* will be set by the templaing system.
