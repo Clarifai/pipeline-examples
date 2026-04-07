@@ -1,9 +1,9 @@
-# Adapted from: pipeline-examples/detector-pipeline-yolof-quick-start/model-version-train-ps/config.yaml
-# Params match train() signature in model.py exactly.
 pipeline_step:
-  id: "model-version-train-ps"
-  user_id: "<YOUR_USER_ID>"
-  app_id: "<YOUR_APP_ID>"
+  id: "detector-pipeline-dfine-ps"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  visibility:
+    gettable: PUBLIC
 
 build_info:
   python_version: "3.11"

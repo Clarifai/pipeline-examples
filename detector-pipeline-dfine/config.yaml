@@ -6,7 +6,7 @@ pipeline:
   user_id: "<YOUR_USER_ID>"
   app_id: "<YOUR_APP_ID>"
   step_directories:
-    - model-version-train-ps
+    - detector-pipeline-dfine-ps
   orchestration_spec:
     argo_orchestration_spec: |
       apiVersion: argoproj.io/v1alpha1
@@ -46,10 +46,10 @@ pipeline:
         templates:
         - name: sequence
           steps:
-          - - name: model-version-train-ps-name
+          - - name: detector-pipeline-dfine-ps-name
               templateRef:
-                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
-                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/detector-pipeline-dfine-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/detector-pipeline-dfine-ps
               arguments:
                 parameters:
                   - name: user_id
