@@ -1,12 +1,7 @@
-# D-FINE Fine-tuning Pipeline
-# Adapted from: pipeline-examples/detector-pipeline-yolof-quick-start/config.yaml
-# Params match train() signature in model.py exactly.
 pipeline:
   id: "<YOUR_PIPELINE_ID>"
   user_id: "<YOUR_USER_ID>"
   app_id: "<YOUR_APP_ID>"
-  step_directories:
-    - model-version-train-ps
   orchestration_spec:
     argo_orchestration_spec: |
       apiVersion: argoproj.io/v1alpha1
@@ -32,7 +27,7 @@ pipeline:
             - name: pretrained_model
               value: "ustc-community/dfine-small-obj2coco"
             - name: num_epochs
-              value: 200
+              value: 300
             - name: batch_size
               value: 8
             - name: learning_rate
@@ -46,10 +41,10 @@ pipeline:
         templates:
         - name: sequence
           steps:
-          - - name: model-version-train-ps-name
+          - - name: detector-pipeline-dfine-ps-name
               templateRef:
-                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
-                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-dfine-ps/versions/96eaad585fb041aab58016f2f19f2f64
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-dfine-ps/versions/96eaad585fb041aab58016f2f19f2f64
               arguments:
                 parameters:
                   - name: user_id
