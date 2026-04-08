@@ -43,6 +43,8 @@ pipeline:
               value: 500
             - name: seed
               value: -1
+            - name: streaming_video
+              value: false
         templates:
         - name: sequence
           steps:
@@ -78,3 +80,5 @@ pipeline:
                     value: "{{workflow.parameters.warmup_steps}}"
                   - name: seed
                     value: "{{workflow.parameters.seed}}"
+                  - name: streaming_video
+                    value: "{{workflow.parameters.streaming_video}}"
