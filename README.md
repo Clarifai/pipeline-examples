@@ -11,47 +11,48 @@ pip install clarifai
 export CLARIFAI_PAT=<your_personal_access_token>
 ```
 
-### Step 2: Initialize a Pipeline from Template
+### Step 2: Browse Available Templates
+
+```bash
+clarifai pipelinetemplate ls
+```
+
+### Step 3: Initialize a Pipeline from Template
 
 ```bash
 clarifai pipeline init --template=classifier-pipeline-resnet-quick-start
 cd classifier-pipeline-resnet-quick-start
 ```
 
-### Step 3: Upload and Run the Pipeline
+### Step 4: Upload and Run the Pipeline
 
 ```bash
 clarifai pipeline upload
 clarifai pipeline run --nodepool_id=<your_nodepool_id> --compute_cluster_id=<your_compute_cluster_id>
 ```
 
-### Step 4: Monitor Your Pipeline
+### Step 5: Monitor Your Pipeline
 
 Go to https://clarifai.com/YOUR_USER_ID/YOUR_APP_ID, check the Pipelines tab to monitor your pipeline and check the Models tab to find your model once training is done.
 
 ## Available Templates
 
-| Template | Description | Use Case |
-|----------|-------------|----------|
-| `classifier-pipeline-resnet-quick-start` | Quick start ResNet-based image classifier | Image classification with sample dataset |
-| `detector-pipeline-yolof-quick-start` | Quick start YOLOF-based object detector | Object detection with sample dataset |
-| `classifier-pipeline-resnet` | ResNet-based image classifier | Image classification tasks |
-| `detector-pipeline-yolof` | YOLOF-based object detector | Object detection tasks |
-| `lora-pipeline-unsloth` | LoRA fine-tuning with Unsloth | LLM fine-tuning tasks |
-| `benchmark-gpu-memory-pipeline` | GPU memory benchmark pipeline | GPU memory testing and benchmarking |
+### Quick-Start Pipelines — Try These First!
 
-## Prerequisites
+Quick-start pipelines come with **default public datasets** pre-configured, so you can launch them right away to see an end-to-end training run — no data preparation needed.
 
-Before getting started, ensure you have:
+| Template | Description |
+|----------|-------------|
+| `classifier-pipeline-resnet-quick-start` | Image classification with ResNet and sample dataset |
+| `detector-pipeline-yolof-quick-start` | Object detection with YOLOF and sample dataset |
+| `lora-pipeline-unsloth-quick-start` | LLM LoRA fine-tuning with Unsloth and sample dataset |
 
-1. **Clarifai CLI installed**
-   ```bash
-   pip install clarifai
-   ```
+### Standard Pipelines
 
-2. **A Clarifai account** with access to:
-   - An **App** 
-   - A **Compute Cluster** with GPU support
-   - A **Nodepool** configured with GPU instances (e.g., `g6exlarge`)
+These are diverse pipelines (some of them may require additional setting up, e.g. a Clarifai dataset as a prerequisite).
 
-3. **Your Personal Access Token (PAT)** from [Clarifai Settings](https://clarifai.com/settings/security)
+| Template | Description |
+|----------|-------------|
+| `classifier-pipeline-resnet` | ResNet-based image classifier |
+| `detector-pipeline-yolof` | YOLOF-based object detector |
+| `detector-pipeline-dfine` | D-FINE-based object detector |
