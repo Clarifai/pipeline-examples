@@ -10,7 +10,7 @@
 #   pip install torch==2.9.1 --force-reinstall --index-url https://download.pytorch.org/whl/cu128
 #   pip install -r requiremen.txt
 # ------------------------------------------------
-clarifai==12.1.7
+clarifai>=12.3
 openai==2.20.0
 hf-transfer==0.1.9
 PyYAML==6.0.3
