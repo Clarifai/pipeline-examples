@@ -1,0 +1,129 @@
+{
+  "name": "chart-analysis-pipeline",
+  "description": "Chart and graph analysis pipeline — uses any Clarifai-hosted VLM (GPT-4o, Claude, Gemini, LLaVA, etc.) to extract data, identify trends, detect anomalies, and generate insights from chart images.",
+  "pipeline_template_type": "CHART_ANALYSIS",
+  "parameters": [
+    {
+      "name": "image_url",
+      "type": "STRING",
+      "required": false,
+      "description": "URL of the chart/graph image to analyze (provide this OR image_base64 OR image_path)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "https://example.com/sales-chart.png"
+      }
+    },
+    {
+      "name": "image_base64",
+      "type": "STRING",
+      "required": false,
+      "description": "Base64-encoded chart image (alternative to image_url)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "iVBORw0KGgo..."
+      }
+    },
+    {
+      "name": "image_path",
+      "type": "STRING",
+      "required": false,
+      "description": "Local file path to a chart image (alternative to image_url)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "/path/to/chart.png"
+      }
+    },
+    {
+      "name": "analysis_type",
+      "type": "STRING",
+      "required": false,
+      "default_string": "general",
+      "description": "Type of chart analysis to perform",
+      "constraints": {
+        "string_constraints": {
+          "enum": ["general", "data_extraction", "trend_analysis", "comparison", "anomaly_detection"]
+        }
+      },
+      "ui_hints": {
+        "widget": "DROPDOWN"
+      }
+    },
+    {
+      "name": "output_format",
+      "type": "STRING",
+      "required": false,
+      "default_string": "detailed",
+      "description": "Output format for the analysis",
+      "constraints": {
+        "string_constraints": {
+          "enum": ["summary", "detailed", "json_table", "markdown"]
+        }
+      },
+      "ui_hints": {
+        "widget": "DROPDOWN"
+      }
+    },
+    {
+      "name": "vlm_model_url",
+      "type": "STRING",
+      "required": true,
+      "description": "Clarifai VLM model URL. Any vision-language model works.",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "https://clarifai.com/openai/chat-completion/models/gpt-4o"
+      }
+    },
+    {
+      "name": "vlm_inference_params",
+      "type": "STRING",
+      "required": false,
+      "default_string": "{\"temperature\": 0.2, \"max_tokens\": 4096}",
+      "description": "JSON string with VLM inference parameters",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "{\"temperature\": 0.2, \"max_tokens\": 4096}"
+      }
+    },
+    {
+      "name": "additional_context",
+      "type": "STRING",
+      "required": false,
+      "description": "Extra context about the chart (domain, expected metrics, units, etc.)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "This is a quarterly revenue chart for Q1-Q4 2025 in USD millions"
+      }
+    },
+    {
+      "name": "user_id",
+      "type": "STRING",
+      "required": true,
+      "description": "Your Clarifai user ID",
+      "ui_hints": {
+        "widget": "DROPDOWN",
+        "data_source": "clarifai.users.list"
+      }
+    },
+    {
+      "name": "app_id",
+      "type": "STRING",
+      "required": true,
+      "description": "Your Clarifai app ID",
+      "ui_hints": {
+        "widget": "DROPDOWN",
+        "data_source": "clarifai.apps.list"
+      }
+    },
+    {
+      "name": "save_results",
+      "type": "BOOL",
+      "required": false,
+      "default_bool": false,
+      "description": "Persist the analysis results to Clarifai as a text input",
+      "ui_hints": {
+        "widget": "TOGGLE",
+        "serialize_as_string": true
+      }
+    }
+  ]
+}

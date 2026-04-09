@@ -1,0 +1,35 @@
+pipeline_step:
+  id: "snap-eval-ps"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "2000m"
+  cpu_memory: "2Gi"
+  num_accelerators: 0
+
+pipeline_step_input_params:
+  - name: csv_path
+    description: "Local path to the evaluation-results CSV"
+  - name: csv_url
+    description: "URL to download the evaluation CSV"
+  - name: csv_text
+    description: "Raw CSV content as a string"
+  - name: failure_threshold
+    description: "Seconds; absolute error above this is FAIL (default: 0.5)"
+  - name: top_n_worst
+    description: "Number of worst predictions to list (default: 20)"
+  - name: llm_model_url
+    description: "Clarifai LLM URL for optional narrative summary"
+  - name: inference_params
+    description: "JSON string with model inference params: {temperature, max_tokens}"
+  - name: user_id
+    description: "Clarifai user ID"
+  - name: app_id
+    description: "Clarifai app ID"
+  - name: save_results
+    description: "Whether to persist results to Clarifai (default: false)"

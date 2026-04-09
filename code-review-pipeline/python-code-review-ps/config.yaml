@@ -1,0 +1,35 @@
+pipeline_step:
+  id: "python-code-review-ps"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "2000m"
+  cpu_memory: "2Gi"
+  num_accelerators: 0
+
+pipeline_step_input_params:
+  - name: repo_url
+    description: "Git repository URL to clone and review (provide this OR code_text)"
+  - name: branch
+    description: "Git branch to checkout (default: main)"
+  - name: file_patterns
+    description: "Comma-separated glob patterns for Python files (default: **/*.py)"
+  - name: code_text
+    description: "Raw Python code string to review inline (alternative to repo_url)"
+  - name: review_strictness
+    description: "Strictness level: low (all issues), medium (warnings+errors), high (errors only)"
+  - name: llm_model_url
+    description: "Clarifai model URL for LLM-powered review (e.g. https://clarifai.com/openai/chat-completion/models/gpt-4o)"
+  - name: llm_inference_params
+    description: "JSON string with LLM inference params: {temperature, max_tokens}"
+  - name: user_id
+    description: "Clarifai user ID (required if save_results is true)"
+  - name: app_id
+    description: "Clarifai app ID (required if save_results is true)"
+  - name: save_results
+    description: "Whether to persist review results to Clarifai as a text input (default: false)"

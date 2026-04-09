@@ -1,0 +1,65 @@
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  step_directories:
+    - python-code-review-ps
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: code-review-pipeline
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: repo_url
+              value: ""
+            - name: branch
+              value: "main"
+            - name: file_patterns
+              value: "**/*.py"
+            - name: code_text
+              value: ""
+            - name: review_strictness
+              value: "medium"
+            - name: llm_model_url
+              value: ""
+            - name: llm_inference_params
+              value: '{"temperature": 0.3, "max_tokens": 4096}'
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: save_results
+              value: "false"
+        templates:
+        - name: sequence
+          steps:
+          - - name: python-code-review
+              templateRef:
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/python-code-review-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/python-code-review-ps
+              arguments:
+                parameters:
+                  - name: repo_url
+                    value: "{{workflow.parameters.repo_url}}"
+                  - name: branch
+                    value: "{{workflow.parameters.branch}}"
+                  - name: file_patterns
+                    value: "{{workflow.parameters.file_patterns}}"
+                  - name: code_text
+                    value: "{{workflow.parameters.code_text}}"
+                  - name: review_strictness
+                    value: "{{workflow.parameters.review_strictness}}"
+                  - name: llm_model_url
+                    value: "{{workflow.parameters.llm_model_url}}"
+                  - name: llm_inference_params
+                    value: "{{workflow.parameters.llm_inference_params}}"
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: save_results
+                    value: "{{workflow.parameters.save_results}}"

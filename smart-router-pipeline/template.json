@@ -1,0 +1,243 @@
+{
+  "name": "smart-router-pipeline",
+  "description": "Intelligent routing pipeline that classifies user intent (code review, chart analysis, or snap-eval analysis) and delegates to the appropriate skill. Uses keyword matching + optional LLM classification. Works with any Clarifai-hosted LLM/VLM.",
+  "pipeline_template_type": "SMART_ROUTER",
+  "parameters": [
+    {
+      "name": "user_prompt",
+      "type": "STRING",
+      "required": true,
+      "description": "Natural-language prompt describing what the user wants. Used for intent classification.",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "Review my Python code for bugs and security issues"
+      }
+    },
+    {
+      "name": "model_url",
+      "type": "STRING",
+      "required": true,
+      "description": "Clarifai model URL — used as LLM (code review), VLM (chart analysis), and for intent classification fallback.",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "https://clarifai.com/openai/chat-completion/models/gpt-4o"
+      }
+    },
+    {
+      "name": "repo_url",
+      "type": "STRING",
+      "required": false,
+      "description": "Git repository URL to clone and review (triggers code review skill)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "https://github.com/user/repo.git"
+      }
+    },
+    {
+      "name": "code_text",
+      "type": "STRING",
+      "required": false,
+      "description": "Raw Python code to review inline (triggers code review skill)",
+      "ui_hints": {
+        "widget": "TEXT_AREA",
+        "placeholder": "def my_function():\n    pass"
+      }
+    },
+    {
+      "name": "review_strictness",
+      "type": "STRING",
+      "required": false,
+      "default_string": "medium",
+      "description": "Code review strictness level",
+      "constraints": {
+        "string_constraints": {
+          "enum": ["low", "medium", "high"]
+        }
+      },
+      "ui_hints": {
+        "widget": "DROPDOWN"
+      }
+    },
+    {
+      "name": "image_url",
+      "type": "STRING",
+      "required": false,
+      "description": "URL of chart/graph image to analyze (triggers chart analysis skill)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "https://example.com/chart.png"
+      }
+    },
+    {
+      "name": "image_base64",
+      "type": "STRING",
+      "required": false,
+      "description": "Base64-encoded chart image (triggers chart analysis skill)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "image_path",
+      "type": "STRING",
+      "required": false,
+      "description": "Local file path to chart image (triggers chart analysis skill)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "analysis_type",
+      "type": "STRING",
+      "required": false,
+      "default_string": "general",
+      "description": "Chart analysis type",
+      "constraints": {
+        "string_constraints": {
+          "enum": ["general", "data_extraction", "trend_analysis", "comparison", "anomaly_detection"]
+        }
+      },
+      "ui_hints": {
+        "widget": "DROPDOWN"
+      }
+    },
+    {
+      "name": "output_format",
+      "type": "STRING",
+      "required": false,
+      "default_string": "detailed",
+      "description": "Output format for chart analysis",
+      "constraints": {
+        "string_constraints": {
+          "enum": ["summary", "detailed", "json_table", "markdown"]
+        }
+      },
+      "ui_hints": {
+        "widget": "DROPDOWN"
+      }
+    },
+    {
+      "name": "additional_context",
+      "type": "STRING",
+      "required": false,
+      "description": "Extra context about the chart (domain, metrics, units)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "Quarterly revenue in USD millions"
+      }
+    },
+    {
+      "name": "csv_path",
+      "type": "STRING",
+      "required": false,
+      "description": "Local path to eval results CSV file (triggers snap-eval skill)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "/path/to/eval_results.csv"
+      }
+    },
+    {
+      "name": "csv_url",
+      "type": "STRING",
+      "required": false,
+      "description": "URL to download eval results CSV (triggers snap-eval skill)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "https://example.com/eval_results.csv"
+      }
+    },
+    {
+      "name": "csv_text",
+      "type": "STRING",
+      "required": false,
+      "description": "Raw CSV string with eval results (triggers snap-eval skill)",
+      "ui_hints": {
+        "widget": "TEXT_AREA",
+        "placeholder": "video,game_id,play_id,...\\n..."
+      }
+    },
+    {
+      "name": "failure_threshold",
+      "type": "STRING",
+      "required": false,
+      "default_string": "0.5",
+      "description": "Absolute-error threshold in seconds — predictions with error above this are classified as failures",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "top_n_worst",
+      "type": "STRING",
+      "required": false,
+      "default_string": "20",
+      "description": "Number of worst predictions to include in the report",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "branch",
+      "type": "STRING",
+      "required": false,
+      "default_string": "main",
+      "description": "Git branch for code review",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "file_patterns",
+      "type": "STRING",
+      "required": false,
+      "default_string": "**/*.py",
+      "description": "Glob patterns for Python files to review",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "inference_params",
+      "type": "STRING",
+      "required": false,
+      "default_string": "{\"temperature\": 0.3, \"max_tokens\": 4096}",
+      "description": "JSON string with model inference parameters",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "user_id",
+      "type": "STRING",
+      "required": true,
+      "description": "Clarifai user ID",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "app_id",
+      "type": "STRING",
+      "required": true,
+      "description": "Clarifai app ID",
+      "ui_hints": {
+        "widget": "TEXT_INPUT"
+      }
+    },
+    {
+      "name": "save_results",
+      "type": "STRING",
+      "required": false,
+      "default_string": "false",
+      "description": "Persist results to Clarifai",
+      "constraints": {
+        "string_constraints": {
+          "enum": ["true", "false"]
+        }
+      },
+      "ui_hints": {
+        "widget": "DROPDOWN"
+      }
+    }
+  ]
+}

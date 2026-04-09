@@ -1,0 +1,65 @@
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  step_directories:
+    - snap-eval-ps
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: snap-eval-pipeline
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: csv_path
+              value: ""
+            - name: csv_url
+              value: ""
+            - name: csv_text
+              value: ""
+            - name: failure_threshold
+              value: "0.5"
+            - name: top_n_worst
+              value: "20"
+            - name: llm_model_url
+              value: ""
+            - name: inference_params
+              value: '{"temperature": 0.3, "max_tokens": 4096}'
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: save_results
+              value: "false"
+        templates:
+        - name: sequence
+          steps:
+          - - name: snap-eval
+              templateRef:
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/snap-eval-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/snap-eval-ps
+              arguments:
+                parameters:
+                  - name: csv_path
+                    value: "{{workflow.parameters.csv_path}}"
+                  - name: csv_url
+                    value: "{{workflow.parameters.csv_url}}"
+                  - name: csv_text
+                    value: "{{workflow.parameters.csv_text}}"
+                  - name: failure_threshold
+                    value: "{{workflow.parameters.failure_threshold}}"
+                  - name: top_n_worst
+                    value: "{{workflow.parameters.top_n_worst}}"
+                  - name: llm_model_url
+                    value: "{{workflow.parameters.llm_model_url}}"
+                  - name: inference_params
+                    value: "{{workflow.parameters.inference_params}}"
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: save_results
+                    value: "{{workflow.parameters.save_results}}"

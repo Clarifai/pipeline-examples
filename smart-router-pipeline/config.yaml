@@ -1,0 +1,118 @@
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  step_directories:
+    - smart-router-ps
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: smart-router-pipeline
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            # ── Router parameters ──
+            - name: user_prompt
+              value: ""
+            - name: model_url
+              value: ""
+            # ── Code Review parameters ──
+            - name: repo_url
+              value: ""
+            - name: branch
+              value: "main"
+            - name: file_patterns
+              value: "**/*.py"
+            - name: code_text
+              value: ""
+            - name: review_strictness
+              value: "medium"
+            # ── Chart Analysis parameters ──
+            - name: image_url
+              value: ""
+            - name: image_base64
+              value: ""
+            - name: image_path
+              value: ""
+            - name: analysis_type
+              value: "general"
+            - name: output_format
+              value: "detailed"
+            - name: additional_context
+              value: ""
+            # ── Snap-Eval parameters ──
+            - name: csv_path
+              value: ""
+            - name: csv_url
+              value: ""
+            - name: csv_text
+              value: ""
+            - name: failure_threshold
+              value: "0.5"
+            - name: top_n_worst
+              value: "20"
+            # ── Shared parameters ──
+            - name: inference_params
+              value: '{"temperature": 0.3, "max_tokens": 4096}'
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: save_results
+              value: "false"
+        templates:
+        - name: sequence
+          steps:
+          - - name: smart-router
+              templateRef:
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/smart-router-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/smart-router-ps
+              arguments:
+                parameters:
+                  - name: user_prompt
+                    value: "{{workflow.parameters.user_prompt}}"
+                  - name: model_url
+                    value: "{{workflow.parameters.model_url}}"
+                  - name: repo_url
+                    value: "{{workflow.parameters.repo_url}}"
+                  - name: branch
+                    value: "{{workflow.parameters.branch}}"
+                  - name: file_patterns
+                    value: "{{workflow.parameters.file_patterns}}"
+                  - name: code_text
+                    value: "{{workflow.parameters.code_text}}"
+                  - name: review_strictness
+                    value: "{{workflow.parameters.review_strictness}}"
+                  - name: image_url
+                    value: "{{workflow.parameters.image_url}}"
+                  - name: image_base64
+                    value: "{{workflow.parameters.image_base64}}"
+                  - name: image_path
+                    value: "{{workflow.parameters.image_path}}"
+                  - name: analysis_type
+                    value: "{{workflow.parameters.analysis_type}}"
+                  - name: output_format
+                    value: "{{workflow.parameters.output_format}}"
+                  - name: additional_context
+                    value: "{{workflow.parameters.additional_context}}"
+                  - name: csv_path
+                    value: "{{workflow.parameters.csv_path}}"
+                  - name: csv_url
+                    value: "{{workflow.parameters.csv_url}}"
+                  - name: csv_text
+                    value: "{{workflow.parameters.csv_text}}"
+                  - name: failure_threshold
+                    value: "{{workflow.parameters.failure_threshold}}"
+                  - name: top_n_worst
+                    value: "{{workflow.parameters.top_n_worst}}"
+                  - name: inference_params
+                    value: "{{workflow.parameters.inference_params}}"
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: save_results
+                    value: "{{workflow.parameters.save_results}}"

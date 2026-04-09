@@ -1,0 +1,116 @@
+{
+  "name": "code-review-pipeline",
+  "description": "Python code review pipeline — runs static analysis (pylint, flake8, bandit) then generates an LLM-powered review using any Clarifai-hosted model.",
+  "pipeline_template_type": "CODE_REVIEW",
+  "parameters": [
+    {
+      "name": "repo_url",
+      "type": "STRING",
+      "required": false,
+      "description": "Git repository URL to clone and review (provide this OR code_text)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "https://github.com/org/repo.git"
+      }
+    },
+    {
+      "name": "branch",
+      "type": "STRING",
+      "required": false,
+      "default_string": "main",
+      "description": "Git branch to checkout",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "main"
+      }
+    },
+    {
+      "name": "file_patterns",
+      "type": "STRING",
+      "required": false,
+      "default_string": "**/*.py",
+      "description": "Comma-separated glob patterns for Python files to review",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "**/*.py"
+      }
+    },
+    {
+      "name": "code_text",
+      "type": "STRING",
+      "required": false,
+      "description": "Raw Python code to review inline (alternative to repo_url)",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "def my_function(): ..."
+      }
+    },
+    {
+      "name": "review_strictness",
+      "type": "STRING",
+      "required": false,
+      "default_string": "medium",
+      "description": "Strictness level for filtering findings",
+      "constraints": {
+        "string_constraints": {
+          "enum": ["low", "medium", "high"]
+        }
+      },
+      "ui_hints": {
+        "widget": "DROPDOWN"
+      }
+    },
+    {
+      "name": "llm_model_url",
+      "type": "STRING",
+      "required": false,
+      "description": "Clarifai model URL for LLM-powered review. Any text-generation model works.",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "https://clarifai.com/openai/chat-completion/models/gpt-4o"
+      }
+    },
+    {
+      "name": "llm_inference_params",
+      "type": "STRING",
+      "required": false,
+      "default_string": "{\"temperature\": 0.3, \"max_tokens\": 4096}",
+      "description": "JSON string with LLM inference parameters",
+      "ui_hints": {
+        "widget": "TEXT_INPUT",
+        "placeholder": "{\"temperature\": 0.3, \"max_tokens\": 4096}"
+      }
+    },
+    {
+      "name": "user_id",
+      "type": "STRING",
+      "required": true,
+      "description": "Your Clarifai user ID",
+      "ui_hints": {
+        "widget": "DROPDOWN",
+        "data_source": "clarifai.users.list"
+      }
+    },
+    {
+      "name": "app_id",
+      "type": "STRING",
+      "required": true,
+      "description": "Your Clarifai app ID",
+      "ui_hints": {
+        "widget": "DROPDOWN",
+        "data_source": "clarifai.apps.list"
+      }
+    },
+    {
+      "name": "save_results",
+      "type": "BOOL",
+      "required": false,
+      "default_bool": false,
+      "description": "Persist the review results to Clarifai as a text input",
+      "ui_hints": {
+        "widget": "TOGGLE",
+        "serialize_as_string": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "params": [
+    {
+      "path": "csv_path",
+      "field_type": 1,
+      "default_value": "",
+      "description": "Local path to the evaluation-results CSV"
+    },
+    {
+      "path": "csv_url",
+      "field_type": 1,
+      "default_value": "",
+      "description": "URL to download the evaluation CSV"
+    },
+    {
+      "path": "csv_text",
+      "field_type": 5,
+      "default_value": "",
+      "description": "Raw CSV content as a string"
+    },
+    {
+      "path": "failure_threshold",
+      "field_type": 1,
+      "default_value": "0.5",
+      "description": "Seconds — absolute error above this threshold is classified as FAIL"
+    },
+    {
+      "path": "top_n_worst",
+      "field_type": 1,
+      "default_value": "20",
+      "description": "Number of worst predictions to include in the output"
+    },
+    {
+      "path": "llm_model_url",
+      "field_type": 1,
+      "default_value": "",
+      "description": "Clarifai model URL for optional LLM narrative summary"
+    },
+    {
+      "path": "inference_params",
+      "field_type": 1,
+      "default_value": "{\"temperature\": 0.3, \"max_tokens\": 4096}",
+      "description": "JSON string with model inference parameters"
+    }
+  ]
+}

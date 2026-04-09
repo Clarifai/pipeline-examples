@@ -1,0 +1,37 @@
+pipeline_step:
+  id: "chart-analysis-ps"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "2000m"
+  cpu_memory: "2Gi"
+  num_accelerators: 0
+
+pipeline_step_input_params:
+  - name: image_url
+    description: "URL of the chart/graph image to analyze (provide this OR image_base64 OR image_path)"
+  - name: image_base64
+    description: "Base64-encoded chart/graph image (alternative to image_url)"
+  - name: image_path
+    description: "Local file path to a chart/graph image (alternative to image_url)"
+  - name: analysis_type
+    description: "Type of analysis: general, data_extraction, trend_analysis, comparison, anomaly_detection"
+  - name: output_format
+    description: "Output format: summary, detailed, json_table, markdown"
+  - name: vlm_model_url
+    description: "Clarifai VLM model URL (e.g. https://clarifai.com/openai/chat-completion/models/gpt-4o)"
+  - name: vlm_inference_params
+    description: "JSON string with VLM inference params: {temperature, max_tokens}"
+  - name: additional_context
+    description: "Extra context about the chart (e.g. domain, expected metrics, units)"
+  - name: user_id
+    description: "Clarifai user ID (required if save_results is true)"
+  - name: app_id
+    description: "Clarifai app ID (required if save_results is true)"
+  - name: save_results
+    description: "Whether to persist analysis results to Clarifai (default: false)"
