@@ -128,3 +128,11 @@ parameters:
       max: 999999
   ui_hints:
     widget: NUMBER_INPUT
+- name: streaming_video
+  type: BOOL
+  required: true
+  default_bool: false
+  description: Whether output model supports streaming
+  ui_hints:
+    widget: TOGGLE
+    serialize_as_string: true

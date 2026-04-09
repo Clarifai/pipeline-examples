@@ -43,3 +43,5 @@ pipeline_step_input_params:
     description: "Linear warmup steps (500 from D-FINE include/optimizer.yml)"
   - name: seed
     description: "Random seed (-1 for default 42)"
+  - name: streaming_video
+    description: "If the trained model should support streaming (default false)"
