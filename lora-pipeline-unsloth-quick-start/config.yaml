@@ -49,7 +49,7 @@ pipeline:
             - name: weight_decay
               value: 0.01
             - name: max_steps
-              value: -1
+              value: 20
             - name: logging_steps
               value: 10
             - name: save_steps
