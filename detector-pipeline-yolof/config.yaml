@@ -51,8 +51,8 @@ pipeline:
           steps:
           - - name: detector-pipeline-yolof-ps-name
               templateRef:
-                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/9a3d7dff8e944fe19b4a06b146046b6e
-                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/9a3d7dff8e944fe19b4a06b146046b6e
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/f7de8ffa896b417c9822bf104da22ac7
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-yolof-ps/versions/f7de8ffa896b417c9822bf104da22ac7
               arguments:
                 parameters:
                   - name: user_id

@@ -55,8 +55,8 @@ pipeline:
           steps:
           - - name: classifier-pipeline-resnet-ps-name
               templateRef:
-                name: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/a5e96fd09380450d86ae987f2071afb6
-                template: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/a5e96fd09380450d86ae987f2071afb6
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/8883b22d1d86487d82f4dc54664818f2
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/classifier-pipeline-resnet-ps/versions/8883b22d1d86487d82f4dc54664818f2
               arguments:
                 parameters:
                   - name: user_id
