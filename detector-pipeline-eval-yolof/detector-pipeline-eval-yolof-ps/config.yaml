@@ -1,0 +1,43 @@
+pipeline_step:
+  id: "detector-pipeline-eval-yolof-ps"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "4000m"
+  cpu_memory: "16Gi"
+  num_accelerators: 1
+  accelerator_memory: "16Gi"
+  accelerator_type: ["NVIDIA-*"]
+
+pipeline_step_input_params:
+  - name: user_id
+    description: "User ID"
+  - name: app_id
+    description: "App ID"
+  - name: dataset_source
+    description: "Dataset source: 'artifact' for pre-packaged dataset or 'clarifai' for Clarifai dataset export"
+  - name: dataset_id
+    description: "Dataset ID (required when dataset_source=clarifai)"
+  - name: dataset_version_id
+    description: "Dataset Version ID (required when dataset_source=clarifai)"
+  - name: concepts
+    description: "List of class names as JSON array"
+  - name: image_size
+    description: "Image size as JSON array (e.g., [512] for min side, or [height, width])"
+  - name: max_aspect_ratio
+    description: "Maximum aspect ratio multiplier for min side (when keep_aspect_ratio=True)"
+  - name: keep_aspect_ratio
+    description: "Whether to keep aspect ratio during resizing"
+  - name: batch_size
+    description: "Inference batch size for evaluation"
+  - name: score_threshold
+    description: "Minimum confidence score for detections"
+  - name: iou_threshold
+    description: "IoU threshold for NMS"
+  - name: pretrained_weights
+    description: "Pretrained weights source (e.g., coco)"
