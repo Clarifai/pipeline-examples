@@ -5,4 +5,4 @@ boto3==1.42.4
 scipy==1.15.3
 yapf==0.40.1
 Pillow==12.0.0
-pycocotools
+pycocotools==2.0.7

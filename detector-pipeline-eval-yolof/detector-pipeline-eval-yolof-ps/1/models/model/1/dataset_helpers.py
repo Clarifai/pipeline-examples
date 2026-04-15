@@ -12,6 +12,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _safe_extract(zf, extract_dir):
+    """Safely extract a ZIP archive, preventing Zip Slip attacks."""
+    extract_dir = os.path.realpath(extract_dir)
+    for member in zf.infolist():
+        member_path = os.path.realpath(os.path.join(extract_dir, member.filename))
+        if not member_path.startswith(extract_dir + os.sep) and member_path != extract_dir:
+            raise ValueError(f"Unsafe path in zip archive: {member.filename}")
+        zf.extract(member, extract_dir)
+
+
 def _transform_image_url(url: str, size: str = "large") -> str:
     """Transform Clarifai image URL to use specified size."""
     return re.sub(r'/(orig|large|small|thumb)/', f'/{size}/', url)
@@ -49,7 +59,12 @@ def _ensure_export_exists(stub, metadata, user_app_id, dataset_id, dataset_versi
         dataset_version_id=dataset_version_id,
         exports=[resources_pb2.DatasetVersionExport(format=resources_pb2.CLARIFAI_DATA_PROTOBUF)],
     )
-    stub.PutDatasetVersionExports(request, metadata=metadata)
+    export_response = stub.PutDatasetVersionExports(request, metadata=metadata)
+    if export_response.status.code != status_code_pb2.SUCCESS:
+        raise Exception(
+            f"PutDatasetVersionExports failed: {export_response.status.code} - "
+            f"{export_response.status.description}"
+        )
 
     max_wait = 300
     start = time.time()
@@ -133,7 +148,7 @@ def download_dataset(
 
         extract_dir = os.path.join(temp_dir, "extracted")
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(extract_dir)
+            _safe_extract(zf, extract_dir)
 
         all_dir = os.path.join(extract_dir, "all")
         if not os.path.exists(all_dir):

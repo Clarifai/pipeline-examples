@@ -1,7 +1,9 @@
 pipeline_step:
   id: "detector-pipeline-eval-yolof-ps"
-  user_id: "<YOUR_USER_ID>"
-  app_id: "<YOUR_APP_ID>"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  visibility:
+    gettable: PUBLIC
 
 build_info:
   python_version: "3.11"

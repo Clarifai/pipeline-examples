@@ -13,6 +13,7 @@ try:
         download_dataset,
         convert_dataset_to_coco_format,
         create_classes_file,
+        _safe_extract,
     )
 except ImportError:
     import sys
@@ -23,6 +24,7 @@ except ImportError:
         download_dataset,
         convert_dataset_to_coco_format,
         create_classes_file,
+        _safe_extract,
     )
 
 logging.basicConfig(level=logging.INFO)
@@ -140,7 +142,7 @@ class YOLOFEvaluator:
             if not dataset_id:
                 raise ValueError("dataset_id is required when dataset_source='clarifai'")
             if not dataset_version_id:
-                 raise ValueError("dataset_version_id is required when dataset_source='clarifai'")
+                raise ValueError("dataset_version_id is required when dataset_source='clarifai'")
 
             dataset_name = download_dataset(
                 user_id=user_id,
@@ -192,7 +194,7 @@ class YOLOFEvaluator:
             logging.info(f"Downloaded dataset to: {dataset_zip_path}")
 
             with zipfile.ZipFile(dataset_zip_path, 'r') as zip_ref:
-                zip_ref.extractall(work_dir)
+                _safe_extract(zip_ref, work_dir)
 
             images_dir = os.path.join(work_dir, "train")
             annotations_path = os.path.join(images_dir, "annotations.json")
@@ -226,6 +228,11 @@ class YOLOFEvaluator:
             min_side = min(image_size_list)
             img_scale = (int(max_aspect_ratio * min_side), min_side)
         else:
+            if len(image_size_list) != 2 or not all(isinstance(v, (int, float)) for v in image_size_list):
+                raise ValueError(
+                    "image_size must be a list of exactly 2 numeric values [height, width] "
+                    "when keep_aspect_ratio=False"
+                )
             img_scale = tuple(image_size_list)
 
         config_path = os.path.join(work_dir, 'eval_config.py')
