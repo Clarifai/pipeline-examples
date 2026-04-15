@@ -1,7 +1,5 @@
 import logging
 import os
-import math
-import tempfile
 import json
 import inspect
 import zipfile
