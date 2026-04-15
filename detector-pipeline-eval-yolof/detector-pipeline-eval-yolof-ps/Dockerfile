@@ -18,7 +18,7 @@ RUN mim install "mmengine==0.10.7"
 RUN mim install "mmcv==2.1.0"
 RUN mim install "mmdet==3.3.0"
 RUN pip install --no-cache-dir numpy==1.26.4
-RUN pip install --no-cache-dir pycocotools
+# RUN pip install --no-cache-dir pycocotools
 
 COPY --link requirements.txt /home/nonroot/requirements.txt
 RUN pip install --no-cache-dir -r /home/nonroot/requirements.txt

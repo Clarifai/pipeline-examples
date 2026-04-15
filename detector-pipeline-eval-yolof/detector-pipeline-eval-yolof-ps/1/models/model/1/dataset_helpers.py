@@ -118,14 +118,18 @@ def download_dataset(
 
     logger.info("Downloading export archive...")
     headers = {'Authorization': f'Key {pat}'}
-    r = requests.get(export_url, headers=headers, timeout=300)
-    r.raise_for_status()
-    logger.info(f"Downloaded {len(r.content):,} bytes")
-
+    
     with tempfile.TemporaryDirectory() as temp_dir:
         zip_path = os.path.join(temp_dir, "export.zip")
-        with open(zip_path, 'wb') as f:
-            f.write(r.content)
+        downloaded_bytes = 0
+        with requests.get(export_url, headers=headers, timeout=300, stream=True) as r:
+            r.raise_for_status()
+            with open(zip_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_bytes += len(chunk)
+        logger.info(f"Downloaded {downloaded_bytes:,} bytes")
 
         extract_dir = os.path.join(temp_dir, "extracted")
         with zipfile.ZipFile(zip_path, 'r') as zf:

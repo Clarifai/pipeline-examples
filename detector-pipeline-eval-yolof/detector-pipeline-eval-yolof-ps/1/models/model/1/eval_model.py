@@ -4,7 +4,6 @@ import json
 import inspect
 import zipfile
 import torch
-import yaml
 from pathlib import Path
 from mmdet.apis import DetInferencer
 from clarifai.client.artifact_version import ArtifactVersion
@@ -27,7 +26,7 @@ except ImportError:
     )
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 class YOLOFEvaluator:
@@ -140,6 +139,8 @@ class YOLOFEvaluator:
         if dataset_source == "clarifai":
             if not dataset_id:
                 raise ValueError("dataset_id is required when dataset_source='clarifai'")
+            if not dataset_version_id:
+                 raise ValueError("dataset_version_id is required when dataset_source='clarifai'")
 
             dataset_name = download_dataset(
                 user_id=user_id,

@@ -43,8 +43,8 @@ pipeline:
           steps:
           - - name: detector-pipeline-eval-yolof-ps-name
               templateRef:
-                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/detector-pipeline-eval-yolof-ps
-                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/detector-pipeline-eval-yolof-ps
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-eval-yolof-ps/versions/<VERSION_ID>
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-eval-yolof-ps/versions/<VERSION_ID>
               arguments:
                 parameters:
                   - name: user_id
