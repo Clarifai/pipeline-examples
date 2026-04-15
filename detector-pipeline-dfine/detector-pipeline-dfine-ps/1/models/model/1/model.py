@@ -576,6 +576,7 @@ class MyRunner(VisualDetectorClass):
               warmup_steps: int = 500,
               seed: int = -1,
               max_steps: int = -1,
+              streaming_video: bool = False,
               ) -> str:
         """Fine-tune D-FINE on a COCO-format dataset, export ONNX, place into model/1/ for local-runner."""
         from clarifai.client.artifact_version import ArtifactVersion
@@ -811,6 +812,30 @@ class MyRunner(VisualDetectorClass):
             model_config['model']['user_id'] = user_id
             model_config['model']['app_id'] = app_id
             model_config['model']['id'] = model_id
+
+            if streaming_video:
+                model_config['streaming_video_consumer'] = True
+                # Update requirements.txt
+                temp_req_path = temp_model_dir / "requirements.txt"
+                with open(temp_req_path, 'a') as f:
+                    f.write("\nav\n")
+                # Update Dockerfile
+                temp_docker_path = temp_model_dir / "Dockerfile"
+                with open(temp_docker_path, 'r') as f:
+                    docker_content = f.read()
+                
+                streaming_deps = (
+                    "COPY --from=public.ecr.aws/clarifai-models/static-streaming:5.1.8 /ffmpeg /usr/local/bin/\n"
+                    "COPY --from=public.ecr.aws/clarifai-models/static-streaming:5.1.8 /ffprobe /usr/local/bin/\n"
+                )
+                # Insert after "as final"
+                if "as final" in docker_content:
+                    parts = docker_content.split("as final", 1)
+                    docker_content = parts[0] + "as final\n\n" + streaming_deps + parts[1]
+                
+                with open(temp_docker_path, 'w') as f:
+                    f.write(docker_content)
+
             with open(temp_config_path, 'w') as f:
                 yaml.dump(model_config, f, default_flow_style=False, sort_keys=False)
 
