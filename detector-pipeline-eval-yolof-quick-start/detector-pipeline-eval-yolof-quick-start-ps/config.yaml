@@ -1,5 +1,5 @@
 pipeline_step:
-  id: "detector-pipeline-eval-yolof-ps"
+  id: "detector-pipeline-eval-yolof-quick-start-ps"
   user_id: "clarifai"
   app_id: "train_pipelines"
   visibility:

@@ -68,8 +68,8 @@ class YOLOFEvaluator:
 
     def evaluate(
         self,
-        user_id: str = "YOUR_USER_ID",
-        app_id: str = "YOUR_APP_ID",
+        user_id: str = "clarifai",
+        app_id: str = "train_pipelines",
         dataset_source: str = "artifact",
         dataset_id: str = "",
         dataset_version_id: str = "",
@@ -77,7 +77,7 @@ class YOLOFEvaluator:
         image_size: str = "[512]",
         max_aspect_ratio: float = 1.5,
         keep_aspect_ratio: bool = True,
-        batch_size: int = 8,
+        batch_size: int = 4,
         score_threshold: float = 0.05,
         iou_threshold: float = 0.6,
         pretrained_weights: str = "coco",

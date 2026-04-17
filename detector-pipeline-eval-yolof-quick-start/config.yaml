@@ -13,9 +13,9 @@ pipeline:
         arguments:
           parameters:
             - name: user_id
-              value: "<YOUR_USER_ID>"
+              value: "clarifai"
             - name: app_id
-              value: "<YOUR_APP_ID>"
+              value: "train_pipelines"
             - name: dataset_source
               value: "artifact"
             - name: dataset_id
@@ -31,7 +31,7 @@ pipeline:
             - name: keep_aspect_ratio
               value: true
             - name: batch_size
-              value: 8
+              value: 4
             - name: score_threshold
               value: 0.05
             - name: iou_threshold
@@ -41,10 +41,10 @@ pipeline:
         templates:
         - name: sequence
           steps:
-          - - name: detector-pipeline-eval-yolof-ps-name
+          - - name: detector-pipeline-eval-yolof-quick-start-ps-name
               templateRef:
-                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-eval-yolof-ps/versions/<VERSION_ID>
-                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-eval-yolof-ps/versions/<VERSION_ID>
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-eval-yolof-quick-start-ps/versions/<VERSION_ID>
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-eval-yolof-quick-start-ps/versions/<VERSION_ID>
               arguments:
                 parameters:
                   - name: user_id
