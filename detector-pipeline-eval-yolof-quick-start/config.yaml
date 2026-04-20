@@ -1,7 +1,11 @@
 pipeline:
-  id: "<YOUR_PIPELINE_ID>"
-  user_id: "<YOUR_USER_ID>"
-  app_id: "<YOUR_APP_ID>"
+  id: "detector-pipeline-eval-yolof-quick-start"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  step_directories:
+    - "detector-pipeline-eval-yolof-quick-start-ps"
+  compute:
+    instance: "g5.xlarge"
   orchestration_spec:
     argo_orchestration_spec: |
       apiVersion: argoproj.io/v1alpha1

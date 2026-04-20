@@ -180,3 +180,4 @@ tmp
 .DS_Store
 
 .agents/
+.venv*/
