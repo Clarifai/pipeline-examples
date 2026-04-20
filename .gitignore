@@ -178,3 +178,6 @@ tmp
 
 # macOS specific files
 .DS_Store
+
+.agents/
+.venv*/
