@@ -1,8 +1,0 @@
-clarifai==12.4.0
-clarifai-protocol>=0.0.35,<0.1.0
-clarifai-grpc==12.3.1
-boto3==1.42.4
-scipy==1.15.3
-yapf==0.40.1
-Pillow==12.0.0
-pycocotools==2.0.7
