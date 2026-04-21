@@ -1,4 +1,9 @@
+# (x86_64 only)
 FROM --platform=linux/amd64 pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
+
+# Use this for GH200
+# Uses NGC PyTorch 23.10 (torch 2.1.0, CUDA 12.2, aarch64-native)
+# FROM nvcr.io/nvidia/pytorch:23.10-py3 (aarch64 + amd64) 
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC

@@ -181,3 +181,5 @@ tmp
 
 .agents/
 .venv*/
+
+Dockerfile.test
