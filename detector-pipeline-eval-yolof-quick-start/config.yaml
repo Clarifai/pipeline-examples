@@ -1,0 +1,79 @@
+pipeline:
+  id: "detector-pipeline-eval-yolof-quick-start"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  step_directories:
+    - "detector-pipeline-eval-yolof-quick-start-ps"
+  compute:
+    instance: "g5.xlarge"
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: <YOUR_PIPELINE_ID>
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: dataset_source
+              value: "artifact"
+            - name: dataset_id
+              value: ""
+            - name: dataset_version_id
+              value: ""
+            - name: concepts
+              value: '["bird","cat"]'
+            - name: image_size
+              value: "[512]"
+            - name: max_aspect_ratio
+              value: 1.5
+            - name: keep_aspect_ratio
+              value: true
+            - name: batch_size
+              value: 4
+            - name: score_threshold
+              value: 0.05
+            - name: iou_threshold
+              value: 0.6
+            - name: pretrained_weights
+              value: "coco"
+        templates:
+        - name: sequence
+          steps:
+          - - name: detector-pipeline-eval-yolof-quick-start-ps-name
+              templateRef:
+                name: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-eval-yolof-quick-start-ps/versions/<VERSION_ID>
+                template: users/clarifai/apps/train_pipelines/pipeline_steps/detector-pipeline-eval-yolof-quick-start-ps/versions/<VERSION_ID>
+              arguments:
+                parameters:
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: dataset_source
+                    value: "{{workflow.parameters.dataset_source}}"
+                  - name: dataset_id
+                    value: "{{workflow.parameters.dataset_id}}"
+                  - name: dataset_version_id
+                    value: "{{workflow.parameters.dataset_version_id}}"
+                  - name: concepts
+                    value: "{{workflow.parameters.concepts}}"
+                  - name: image_size
+                    value: "{{workflow.parameters.image_size}}"
+                  - name: max_aspect_ratio
+                    value: "{{workflow.parameters.max_aspect_ratio}}"
+                  - name: keep_aspect_ratio
+                    value: "{{workflow.parameters.keep_aspect_ratio}}"
+                  - name: batch_size
+                    value: "{{workflow.parameters.batch_size}}"
+                  - name: score_threshold
+                    value: "{{workflow.parameters.score_threshold}}"
+                  - name: iou_threshold
+                    value: "{{workflow.parameters.iou_threshold}}"
+                  - name: pretrained_weights
+                    value: "{{workflow.parameters.pretrained_weights}}"
