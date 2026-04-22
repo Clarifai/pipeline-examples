@@ -17,9 +17,9 @@ pipeline:
         arguments:
           parameters:
             - name: user_id
-              value: "clarifai"
+              value: "<YOUR_USER_ID>"
             - name: app_id
-              value: "train_pipelines"
+              value: "<YOUR_APP_ID>"
             - name: dataset_source
               value: "artifact"
             - name: dataset_id
