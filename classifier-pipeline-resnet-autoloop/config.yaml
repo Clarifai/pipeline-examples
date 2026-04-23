@@ -1,0 +1,333 @@
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: resnet-autoloop-
+      spec:
+        entrypoint: autoloop
+        arguments:
+          parameters:
+            # ── Existing ResNet training parameters ──
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: model_id
+              value: "test_model"
+            - name: dataset_id
+              value: "<YOUR_DATASET_ID>"
+            - name: dataset_version_id
+              value: ""
+            - name: concepts
+              value: '["beignets","hamburger","prime_rib","ramen"]'
+            - name: num_epochs
+              value: "200"
+            - name: batch_size
+              value: "64"
+            - name: image_size
+              value: "224"
+            - name: per_item_lrate
+              value: "0.00001953125"
+            - name: weight_decay
+              value: "0.01"
+            - name: per_item_min_lrate
+              value: "1.5625e-8"
+            - name: warmup_iters
+              value: "5"
+            - name: warmup_ratio
+              value: "0.0001"
+            - name: flip_probability
+              value: "0.5"
+            - name: flip_direction
+              value: "horizontal"
+            - name: concepts_mutually_exclusive
+              value: "false"
+            - name: pretrained_weights
+              value: "ImageNet-1k"
+            - name: seed
+              value: "-1"
+            # ── Autoloop-specific parameters ──
+            - name: task_type
+              value: "classification"
+            - name: metric_threshold
+              value: "0.85"
+            - name: primary_metric
+              value: "auto"
+            - name: metric_direction
+              value: "auto"
+            - name: max_retrain_iterations
+              value: "3"
+            - name: tuning_strategy
+              value: "schedule"
+            - name: search_space
+              value: "auto"
+            - name: lr_decay_factor
+              value: "0.5"
+            - name: unfreeze_on_retry
+              value: "false"
+            - name: early_stop_min_delta
+              value: "0.0"
+            - name: overfitting_detection
+              value: "false"
+            - name: warm_start
+              value: "true"
+            # ── Loop state parameters ──
+            - name: current_iteration
+              value: "1"
+            - name: current_hyperparams
+              value: "{}"
+            - name: hp_history
+              value: "[]"
+
+        templates:
+          # ── Main DAG ──────────────────────────────────────────────
+          - name: autoloop
+            inputs:
+              parameters:
+                - name: current_iteration
+                - name: current_hyperparams
+                - name: hp_history
+            dag:
+              tasks:
+                # ── STEP 1: Train (ResNet classifier) ──
+                - name: train
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/classifier-pipeline-resnet-ps/versions/<TRAIN_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/classifier-pipeline-resnet-ps/versions/<TRAIN_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: user_id
+                        value: "{{workflow.parameters.user_id}}"
+                      - name: app_id
+                        value: "{{workflow.parameters.app_id}}"
+                      - name: model_id
+                        value: "{{workflow.parameters.model_id}}"
+                      - name: dataset_id
+                        value: "{{workflow.parameters.dataset_id}}"
+                      - name: dataset_version_id
+                        value: "{{workflow.parameters.dataset_version_id}}"
+                      - name: concepts
+                        value: "{{workflow.parameters.concepts}}"
+                      - name: num_epochs
+                        value: "{{workflow.parameters.num_epochs}}"
+                      - name: batch_size
+                        value: "{{workflow.parameters.batch_size}}"
+                      - name: image_size
+                        value: "{{workflow.parameters.image_size}}"
+                      - name: per_item_lrate
+                        value: "{{workflow.parameters.per_item_lrate}}"
+                      - name: weight_decay
+                        value: "{{workflow.parameters.weight_decay}}"
+                      - name: per_item_min_lrate
+                        value: "{{workflow.parameters.per_item_min_lrate}}"
+                      - name: warmup_iters
+                        value: "{{workflow.parameters.warmup_iters}}"
+                      - name: warmup_ratio
+                        value: "{{workflow.parameters.warmup_ratio}}"
+                      - name: flip_probability
+                        value: "{{workflow.parameters.flip_probability}}"
+                      - name: flip_direction
+                        value: "{{workflow.parameters.flip_direction}}"
+                      - name: concepts_mutually_exclusive
+                        value: "{{workflow.parameters.concepts_mutually_exclusive}}"
+                      - name: pretrained_weights
+                        value: "{{workflow.parameters.pretrained_weights}}"
+                      - name: seed
+                        value: "{{workflow.parameters.seed}}"
+                      - name: hyperparams_json
+                        value: "{{inputs.parameters.current_hyperparams}}"
+
+                # ── STEP 2: Evaluate (inline — extract metrics from train output) ──
+                # NOTE: The ResNet train step produces eval metrics in its work dir.
+                # This inline step reads them and writes eval_results.json for the
+                # decision step. Replace with a dedicated eval pipeline step when available.
+                - name: eval
+                  depends: "train.Succeeded"
+                  template: extract-eval-metrics
+                  arguments:
+                    parameters:
+                      - name: train_work_dir
+                        value: "{{tasks.train.outputs.parameters.work_dir}}"
+
+                # ── STEP 3: Metric Decision ──
+                - name: decide
+                  depends: "eval.Succeeded"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/metric-decision-ps/versions/<METRIC_DECISION_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/metric-decision-ps/versions/<METRIC_DECISION_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: eval_results_json
+                        value: "{{tasks.eval.outputs.parameters.eval_results}}"
+                      - name: task_type
+                        value: "{{workflow.parameters.task_type}}"
+                      - name: primary_metric
+                        value: "{{workflow.parameters.primary_metric}}"
+                      - name: metric_direction
+                        value: "{{workflow.parameters.metric_direction}}"
+                      - name: metric_threshold
+                        value: "{{workflow.parameters.metric_threshold}}"
+                      - name: current_iteration
+                        value: "{{inputs.parameters.current_iteration}}"
+                      - name: max_retrain_iterations
+                        value: "{{workflow.parameters.max_retrain_iterations}}"
+                      - name: hp_history
+                        value: "{{inputs.parameters.hp_history}}"
+                      - name: current_hyperparams
+                        value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: early_stop_min_delta
+                        value: "{{workflow.parameters.early_stop_min_delta}}"
+                      - name: overfitting_detection
+                        value: "{{workflow.parameters.overfitting_detection}}"
+
+                # ── BRANCH: Deploy → Export ──
+                - name: export
+                  depends: "decide.Succeeded"
+                  when: "{{tasks.decide.outputs.parameters.decision}} == deploy"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-export-ps/versions/<EXPORT_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-export-ps/versions/<EXPORT_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: user_id
+                        value: "{{workflow.parameters.user_id}}"
+                      - name: app_id
+                        value: "{{workflow.parameters.app_id}}"
+                      - name: model_id
+                        value: "{{workflow.parameters.model_id}}"
+                      - name: checkpoint_path
+                        value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
+                      - name: config_path
+                        value: "{{tasks.train.outputs.parameters.config_path}}"
+
+                # ── STEP 4: HP Adjustment (retrain only) ──
+                - name: hp-adjust
+                  depends: "decide.Succeeded"
+                  when: "{{tasks.decide.outputs.parameters.decision}} == retrain"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/hp-adjust-ps/versions/<HP_ADJUST_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/hp-adjust-ps/versions/<HP_ADJUST_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: hp_history
+                        value: "{{tasks.decide.outputs.parameters.hp_history}}"
+                      - name: current_hyperparams
+                        value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: task_type
+                        value: "{{workflow.parameters.task_type}}"
+                      - name: tuning_strategy
+                        value: "{{workflow.parameters.tuning_strategy}}"
+                      - name: search_space
+                        value: "{{workflow.parameters.search_space}}"
+                      - name: lr_decay_factor
+                        value: "{{workflow.parameters.lr_decay_factor}}"
+                      - name: unfreeze_on_retry
+                        value: "{{workflow.parameters.unfreeze_on_retry}}"
+                      - name: is_overfitting
+                        value: "{{tasks.decide.outputs.parameters.is_overfitting}}"
+                      - name: seed
+                        value: "{{workflow.parameters.seed}}"
+
+                # ── STEP 5: Recursive Retrain ──
+                - name: retrain
+                  depends: "hp-adjust.Succeeded"
+                  template: autoloop
+                  arguments:
+                    parameters:
+                      - name: current_iteration
+                        value: "{{tasks.decide.outputs.parameters.next_iteration}}"
+                      - name: current_hyperparams
+                        value: "{{tasks.hp-adjust.outputs.parameters.hyperparams_json}}"
+                      - name: hp_history
+                        value: "{{tasks.decide.outputs.parameters.hp_history}}"
+
+                # ── BRANCH: Stop → Report ──
+                - name: report-failure
+                  depends: "decide.Succeeded"
+                  when: "{{tasks.decide.outputs.parameters.decision}} == stop"
+                  template: failure-report
+                  arguments:
+                    parameters:
+                      - name: final_metric
+                        value: "{{tasks.decide.outputs.parameters.metric_value}}"
+                      - name: metric_name
+                        value: "{{tasks.decide.outputs.parameters.metric_name}}"
+                      - name: iterations_run
+                        value: "{{tasks.decide.outputs.parameters.current_iteration}}"
+
+          # ── Extract Eval Metrics Template ────────────────────────
+          # Inline step: reads MMPretrain train output and produces
+          # eval_results.json in the format expected by metric-decision-ps.
+          # Replace this with a dedicated classifier-eval pipeline step
+          # when one becomes available.
+          - name: extract-eval-metrics
+            inputs:
+              parameters:
+                - name: train_work_dir
+            outputs:
+              parameters:
+                - name: eval_results
+                  valueFrom:
+                    path: /tmp/eval_results.json
+            container:
+              image: python:3.11-slim
+              command: [python, -c]
+              args:
+                - |
+                  import json, glob, os
+
+                  work_dir = "{{inputs.parameters.train_work_dir}}"
+
+                  # MMPretrain writes eval metrics to the training log.
+                  # Look for the last logged eval results in the JSON log file.
+                  log_files = sorted(glob.glob(os.path.join(work_dir, "*.log.json")))
+                  metrics = {}
+
+                  if log_files:
+                      with open(log_files[-1], 'r') as f:
+                          for line in f:
+                              try:
+                                  entry = json.loads(line.strip())
+                                  # MMPretrain logs eval metrics with mode="val"
+                                  if entry.get("mode") == "val":
+                                      metrics = {
+                                          k: v for k, v in entry.items()
+                                          if k not in ("mode", "epoch", "iter", "lr", "step")
+                                      }
+                              except json.JSONDecodeError:
+                                  continue
+
+                  eval_results = {"metrics": metrics}
+                  output_path = "/tmp/eval_results.json"
+                  with open(output_path, 'w') as f:
+                      json.dump(eval_results, f, indent=2)
+
+                  print(f"Extracted metrics: {json.dumps(metrics, indent=2)}")
+
+          # ── Failure Report Template ───────────────────────────────
+          - name: failure-report
+            inputs:
+              parameters:
+                - name: final_metric
+                - name: metric_name
+                - name: iterations_run
+            container:
+              image: python:3.11-slim
+              command: [python, -c]
+              args:
+                - |
+                  import json, sys
+                  report = {
+                    "status": "FAILED",
+                    "reason": "Metric threshold not met after max iterations",
+                    "metric_name": "{{inputs.parameters.metric_name}}",
+                    "final_metric": float("{{inputs.parameters.final_metric}}"),
+                    "iterations_run": int("{{inputs.parameters.iterations_run}}"),
+                  }
+                  print(json.dumps(report, indent=2))
+                  sys.exit(1)

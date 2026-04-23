@@ -1,0 +1,299 @@
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: yolof-autoloop-
+      spec:
+        entrypoint: autoloop
+        arguments:
+          parameters:
+            # ── Existing training parameters ──
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: model_id
+              value: "test_detector"
+            - name: dataset_id
+              value: "<YOUR_DATASET_ID>"
+            - name: dataset_version_id
+              value: ""
+            - name: concepts
+              value: '["bird","cat"]'
+            - name: seed
+              value: "-1"
+            - name: image_size
+              value: "[512]"
+            - name: max_aspect_ratio
+              value: "1.5"
+            - name: keep_aspect_ratio
+              value: "true"
+            - name: batch_size
+              value: "16"
+            - name: num_epochs
+              value: "100"
+            - name: min_samples_per_epoch
+              value: "300"
+            - name: per_item_lrate
+              value: "0.001875"
+            - name: pretrained_weights
+              value: "coco"
+            - name: frozen_stages
+              value: "1"
+            - name: inference_max_batch_size
+              value: "2"
+            # ── Autoloop-specific parameters ──
+            - name: task_type
+              value: "detection"
+            - name: metric_threshold
+              value: "0.50"
+            - name: primary_metric
+              value: "auto"
+            - name: metric_direction
+              value: "auto"
+            - name: max_retrain_iterations
+              value: "3"
+            - name: tuning_strategy
+              value: "schedule"
+            - name: search_space
+              value: "auto"
+            - name: lr_decay_factor
+              value: "0.5"
+            - name: unfreeze_on_retry
+              value: "true"
+            - name: early_stop_min_delta
+              value: "0.0"
+            - name: overfitting_detection
+              value: "false"
+            - name: warm_start
+              value: "true"
+            - name: score_threshold
+              value: "0.05"
+            - name: iou_threshold
+              value: "0.6"
+            # ── Loop state parameters ──
+            - name: current_iteration
+              value: "1"
+            - name: current_hyperparams
+              value: "{}"
+            - name: hp_history
+              value: "[]"
+
+        templates:
+          # ── Main DAG ──────────────────────────────────────────────
+          - name: autoloop
+            inputs:
+              parameters:
+                - name: current_iteration
+                - name: current_hyperparams
+                - name: hp_history
+            dag:
+              tasks:
+                # ── STEP 1: Train ──
+                - name: train
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/detector-pipeline-yolof-ps/versions/<TRAIN_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/detector-pipeline-yolof-ps/versions/<TRAIN_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: user_id
+                        value: "{{workflow.parameters.user_id}}"
+                      - name: app_id
+                        value: "{{workflow.parameters.app_id}}"
+                      - name: model_id
+                        value: "{{workflow.parameters.model_id}}"
+                      - name: dataset_id
+                        value: "{{workflow.parameters.dataset_id}}"
+                      - name: dataset_version_id
+                        value: "{{workflow.parameters.dataset_version_id}}"
+                      - name: concepts
+                        value: "{{workflow.parameters.concepts}}"
+                      - name: seed
+                        value: "{{workflow.parameters.seed}}"
+                      - name: image_size
+                        value: "{{workflow.parameters.image_size}}"
+                      - name: max_aspect_ratio
+                        value: "{{workflow.parameters.max_aspect_ratio}}"
+                      - name: keep_aspect_ratio
+                        value: "{{workflow.parameters.keep_aspect_ratio}}"
+                      - name: batch_size
+                        value: "{{workflow.parameters.batch_size}}"
+                      - name: num_epochs
+                        value: "{{workflow.parameters.num_epochs}}"
+                      - name: min_samples_per_epoch
+                        value: "{{workflow.parameters.min_samples_per_epoch}}"
+                      - name: per_item_lrate
+                        value: "{{workflow.parameters.per_item_lrate}}"
+                      - name: pretrained_weights
+                        value: "{{workflow.parameters.pretrained_weights}}"
+                      - name: frozen_stages
+                        value: "{{workflow.parameters.frozen_stages}}"
+                      - name: inference_max_batch_size
+                        value: "{{workflow.parameters.inference_max_batch_size}}"
+                      - name: hyperparams_json
+                        value: "{{inputs.parameters.current_hyperparams}}"
+
+                # ── STEP 2: Evaluate ──
+                - name: eval
+                  depends: "train.Succeeded"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/detector-pipeline-eval-yolof-quick-start-ps/versions/<EVAL_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/detector-pipeline-eval-yolof-quick-start-ps/versions/<EVAL_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: user_id
+                        value: "{{workflow.parameters.user_id}}"
+                      - name: app_id
+                        value: "{{workflow.parameters.app_id}}"
+                      - name: checkpoint_source
+                        value: "path"
+                      - name: checkpoint_path
+                        value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
+                      - name: config_path
+                        value: "{{tasks.train.outputs.parameters.config_path}}"
+                      - name: dataset_id
+                        value: "{{workflow.parameters.dataset_id}}"
+                      - name: concepts
+                        value: "{{workflow.parameters.concepts}}"
+                      - name: image_size
+                        value: "{{workflow.parameters.image_size}}"
+                      - name: batch_size
+                        value: "4"
+                      - name: score_threshold
+                        value: "{{workflow.parameters.score_threshold}}"
+                      - name: iou_threshold
+                        value: "{{workflow.parameters.iou_threshold}}"
+
+                # ── STEP 3: Metric Decision ──
+                - name: decide
+                  depends: "eval.Succeeded"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/metric-decision-ps/versions/<METRIC_DECISION_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/metric-decision-ps/versions/<METRIC_DECISION_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: eval_results_json
+                        value: "{{tasks.eval.outputs.parameters.eval_results}}"
+                      - name: task_type
+                        value: "{{workflow.parameters.task_type}}"
+                      - name: primary_metric
+                        value: "{{workflow.parameters.primary_metric}}"
+                      - name: metric_direction
+                        value: "{{workflow.parameters.metric_direction}}"
+                      - name: metric_threshold
+                        value: "{{workflow.parameters.metric_threshold}}"
+                      - name: current_iteration
+                        value: "{{inputs.parameters.current_iteration}}"
+                      - name: max_retrain_iterations
+                        value: "{{workflow.parameters.max_retrain_iterations}}"
+                      - name: hp_history
+                        value: "{{inputs.parameters.hp_history}}"
+                      - name: current_hyperparams
+                        value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: early_stop_min_delta
+                        value: "{{workflow.parameters.early_stop_min_delta}}"
+                      - name: overfitting_detection
+                        value: "{{workflow.parameters.overfitting_detection}}"
+
+                # ── BRANCH: Deploy → Export ──
+                - name: export
+                  depends: "decide.Succeeded"
+                  when: "{{tasks.decide.outputs.parameters.decision}} == deploy"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-export-ps/versions/<EXPORT_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-export-ps/versions/<EXPORT_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: user_id
+                        value: "{{workflow.parameters.user_id}}"
+                      - name: app_id
+                        value: "{{workflow.parameters.app_id}}"
+                      - name: model_id
+                        value: "{{workflow.parameters.model_id}}"
+                      - name: checkpoint_path
+                        value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
+                      - name: config_path
+                        value: "{{tasks.train.outputs.parameters.config_path}}"
+
+                # ── STEP 4: HP Adjustment (retrain only) ──
+                - name: hp-adjust
+                  depends: "decide.Succeeded"
+                  when: "{{tasks.decide.outputs.parameters.decision}} == retrain"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/hp-adjust-ps/versions/<HP_ADJUST_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/hp-adjust-ps/versions/<HP_ADJUST_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: hp_history
+                        value: "{{tasks.decide.outputs.parameters.hp_history}}"
+                      - name: current_hyperparams
+                        value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: task_type
+                        value: "{{workflow.parameters.task_type}}"
+                      - name: tuning_strategy
+                        value: "{{workflow.parameters.tuning_strategy}}"
+                      - name: search_space
+                        value: "{{workflow.parameters.search_space}}"
+                      - name: lr_decay_factor
+                        value: "{{workflow.parameters.lr_decay_factor}}"
+                      - name: unfreeze_on_retry
+                        value: "{{workflow.parameters.unfreeze_on_retry}}"
+                      - name: is_overfitting
+                        value: "{{tasks.decide.outputs.parameters.is_overfitting}}"
+                      - name: seed
+                        value: "{{workflow.parameters.seed}}"
+
+                # ── STEP 5: Recursive Retrain ──
+                - name: retrain
+                  depends: "hp-adjust.Succeeded"
+                  template: autoloop
+                  arguments:
+                    parameters:
+                      - name: current_iteration
+                        value: "{{tasks.decide.outputs.parameters.next_iteration}}"
+                      - name: current_hyperparams
+                        value: "{{tasks.hp-adjust.outputs.parameters.hyperparams_json}}"
+                      - name: hp_history
+                        value: "{{tasks.decide.outputs.parameters.hp_history}}"
+
+                # ── BRANCH: Stop → Report ──
+                - name: report-failure
+                  depends: "decide.Succeeded"
+                  when: "{{tasks.decide.outputs.parameters.decision}} == stop"
+                  template: failure-report
+                  arguments:
+                    parameters:
+                      - name: final_metric
+                        value: "{{tasks.decide.outputs.parameters.metric_value}}"
+                      - name: metric_name
+                        value: "{{tasks.decide.outputs.parameters.metric_name}}"
+                      - name: iterations_run
+                        value: "{{tasks.decide.outputs.parameters.current_iteration}}"
+
+          # ── Failure Report Template ───────────────────────────────
+          - name: failure-report
+            inputs:
+              parameters:
+                - name: final_metric
+                - name: metric_name
+                - name: iterations_run
+            container:
+              image: python:3.11-slim
+              command: [python, -c]
+              args:
+                - |
+                  import json, sys
+                  report = {
+                    "status": "FAILED",
+                    "reason": "Metric threshold not met after max iterations",
+                    "metric_name": "{{inputs.parameters.metric_name}}",
+                    "final_metric": float("{{inputs.parameters.final_metric}}"),
+                    "iterations_run": int("{{inputs.parameters.iterations_run}}"),
+                  }
+                  print(json.dumps(report, indent=2))
+                  sys.exit(1)

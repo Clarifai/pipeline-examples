@@ -1,0 +1,19 @@
+Parameter,Category,Type,Default,Constraints,Source,Description
+eval_results_json,Input,string,,Required,Eval step output,Path to eval_results.json from evaluation step
+task_type,Input,string,detection,"detection,classification,llm_finetune",Workflow param,Task type — determines default metric name and direction
+primary_metric,Input,string,auto,,Workflow param,"Metric name for threshold comparison — 'auto' resolves per task_type (detection: AP, classification: accuracy/top1, llm_finetune: eval_loss)"
+metric_direction,Input,string,auto,"maximize,minimize,auto",Workflow param,"Whether higher or lower metric is better — auto-resolves from task_type or metric name patterns (loss→minimize, accuracy→maximize)"
+metric_threshold,Input,float,0.50,0.0–inf,Workflow param,"Quality gate — metric must meet this to trigger deploy (detection: 0.50, classification: 0.85, LLM: 1.5)"
+current_iteration,Loop State,int,1,1+,Workflow param or prior decide output,Current loop iteration counter (1-indexed)
+max_retrain_iterations,Loop State,int,3,1–10,Workflow param,Maximum retrain attempts before outputting decision=stop
+hp_history,Loop State,string (JSON),[],Valid JSON array,Prior decide step output,JSON array of previous iteration records — this step appends the current iteration before outputting
+current_hyperparams,Loop State,string (JSON),{},Valid JSON object,Workflow param or prior hp-adjust output,Current iteration's hyperparameters — stored in history for tracking only (not modified by this step)
+early_stop_min_delta,Stopping,float,0.0,0.0–1.0,Workflow param,Minimum metric improvement between consecutive iterations — 0 disables early stopping
+overfitting_detection,Stopping,bool,false,,Workflow param,Enable train_loss vs eval_loss divergence check — primarily useful for LLM fine-tuning
+decision,Output,string,,"deploy,retrain,stop",Written to /tmp/decision,Routing decision for Argo conditional branching
+metric_value,Output,string (float),,Non-negative,Written to /tmp/metric_value,Current primary metric value (formatted to 6 decimal places)
+metric_name,Output,string,,,Written to /tmp/metric_name,Resolved primary metric name (e.g. AP or accuracy/top1 or eval_loss)
+hp_history (out),Output,string (JSON),,Valid JSON array,Written to /tmp/hp_history,Updated history with current iteration appended
+is_overfitting,Output,string (bool),false,"true,false",Written to /tmp/is_overfitting,Whether overfitting was detected — passed to HP adjustment step for regularization overrides
+current_iteration (out),Output,string (int),,1+,Written to /tmp/current_iteration,Passthrough of current iteration for downstream steps
+next_iteration,Output,string (int),,2+,Written to /tmp/next_iteration,Incremented iteration counter for recursive retrain

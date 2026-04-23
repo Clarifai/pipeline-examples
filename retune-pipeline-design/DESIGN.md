@@ -10,17 +10,19 @@
 This document describes the design for an autonomous ML training loop pipeline for YOLOF object detection on the Clarifai platform. The pipeline orchestrates a closed-loop cycle:
 
 ```
-Train Model → Evaluate (COCO Benchmarks) → Compare AP Against Threshold
-    → Pass: Export & Upload to Clarifai
-    → Fail (iterations remaining): Adjust Hyperparameters → Retrain
-    → Fail (max iterations exhausted): Report Failure
+Train Model → Evaluate → Compare Metric Against Threshold
+    → Deploy: Export & Upload to Clarifai
+    → Retrain (iterations remaining): Adjust Hyperparameters → Retrain
+    → Stop (max iterations exhausted or plateau): Report Failure
 ```
 
 The pipeline is implemented as an Argo Workflow with **conditional branching** using two supported approaches:
 - **Approach A** — DAG with recursive WorkflowTemplate (recommended for production)
 - **Approach B** — Unrolled multi-step sequential (fallback for simpler environments)
 
-Both approaches reuse the existing `detector-pipeline-yolof` training step and `detector-pipeline-eval-yolof-quick-start` evaluation step, adding a new lightweight **metric-decision** step for threshold comparison and hyperparameter adjustment.
+Both approaches reuse the existing `detector-pipeline-yolof` training step and `detector-pipeline-eval-yolof-quick-start` evaluation step, adding two new lightweight CPU-only steps:
+- **metric-decision** step for threshold comparison and routing decisions ([design doc](metric-decision-design.md))
+- **hp-adjust** step for hyperparameter adjustment on retrain ([design doc](hp-adjustment-design.md))
 
 ---
 
@@ -41,26 +43,26 @@ An autonomous loop eliminates this gap by closing the feedback loop within a sin
 ### 3.1 High-Level Flow
 
 ```
-┌─────────┐     ┌──────────┐     ┌──────────┐
-│  Train   │────▶│ Evaluate │────▶│  Decide  │
-│ (GPU)    │     │  (GPU)   │     │ (CPU)    │
-└─────────┘     └──────────┘     └────┬─────┘
-                                      │
-                    ┌─────────────────┬┴────────────────┐
-                    ▼                 ▼                  ▼
-            decision="pass"   decision="retrain"  decision="fail"
-                    │                 │                  │
-              ┌─────▼─────┐   ┌──────▼──────┐   ┌──────▼──────┐
-              │  Export &  │   │ Adjust HPs  │   │   Report    │
-              │  Upload    │   │ & Re-enter  │   │  Failure    │
-              │ (CPU/GPU)  │   │   Loop      │   │  (CPU)      │
-              └───────────┘   └──────┬──────┘   └─────────────┘
-                                     │
-                                     ▼
-                              ┌─────────┐
-                              │  Train   │  (iteration N+1)
-                              │  ...     │
-                              └─────────┘
+┌─────────┐     ┌──────────┐     ┌───────────────┐
+│  Train   │────▶│ Evaluate │────▶│ Metric        │
+│ (GPU)    │     │  (GPU)   │     │ Decision      │
+└─────────┘     └──────────┘     │ (CPU)         │
+                                  └───────┬───────┘
+                                          │
+                    ┌─────────────────────┬┴──────────────────┐
+                    ▼                     ▼                    ▼
+            decision="deploy"     decision="retrain"   decision="stop"
+                    │                     │                    │
+              ┌─────▼─────┐       ┌──────▼───────┐    ┌──────▼──────┐
+              │  Export &  │       │  HP Adjust   │    │   Report    │
+              │  Upload    │       │  (CPU)       │    │  Failure    │
+              │ (CPU/GPU)  │       └──────┬───────┘    └─────────────┘
+              └───────────┘              │
+                                         ▼
+                                  ┌─────────┐
+                                  │  Train   │  (iteration N+1)
+                                  │  ...     │
+                                  └─────────┘
 ```
 
 ### 3.2 Pipeline Steps
@@ -69,26 +71,31 @@ An autonomous loop eliminates this gap by closing the feedback loop within a sin
 |------|-----------|---------|---------|
 | **yolof-train** | Reuse `detector-pipeline-yolof-ps` (modified) | 4 CPU, 16Gi RAM, 1× GPU 16Gi | Train YOLOF model, output checkpoint |
 | **yolof-eval** | Reuse `detector-pipeline-eval-yolof-quick-start-ps` (modified) | 4 CPU, 16Gi RAM, 1× GPU 16Gi | Run COCO evaluation, output metrics JSON |
-| **metric-decision** | **New** | 1 CPU, 2Gi RAM, **no GPU** | Compare AP against threshold, output decision + adjusted HPs |
+| **metric-decision** | **New** ([design](metric-decision-design.md)) | 1 CPU, 2Gi RAM, **no GPU** | Compare metrics against threshold, output routing decision (deploy/retrain/stop) |
+| **hp-adjust** | **New** ([design](hp-adjustment-design.md)) | 1 CPU, 2Gi RAM, **no GPU** | Generate adjusted hyperparameters for next training iteration (only runs on retrain) |
 | **model-export** | Reuse export logic from train step | 2 CPU, 4Gi RAM, no GPU | Upload passing model to Clarifai platform |
 
 ### 3.3 Data Flow Between Steps
 
 ```
-Train Step                    Eval Step                     Decision Step
-───────────                   ─────────                     ─────────────
-Outputs:                      Inputs:                       Inputs:
- • checkpoint_path ──────────▶ checkpoint_path               • eval_results_json ◀── eval results
- • config_path ──────────────▶ config_path                   • ap_threshold
- • train_output.json          Outputs:                       • current_iteration
-   (Argo output param)         • eval_results.json ────────▶ • max_retrain_iterations
-                                (Argo output param)          • current_per_item_lrate
-                                                             • current_frozen_stages
-                                                            Outputs:
-                                                             • decision (pass|retrain|fail)
-                                                             • new_per_item_lrate
-                                                             • new_frozen_stages
-                                                             • next_iteration
+Train Step              Eval Step               Decision Step            HP Adjust Step
+───────────             ─────────               ─────────────            ──────────────
+Outputs:                Inputs:                  Inputs:                  Inputs:
+ • checkpoint_path ────▶ checkpoint_path          • eval_results_json     • hp_history
+ • config_path ────────▶ config_path              • task_type             • current_hyperparams
+ • train_output.json    Outputs:                  • primary_metric        • task_type
+                         • eval_results.json ────▶ • metric_threshold     • tuning_strategy
+                                                  • current_iteration     • search_space
+                                                  • max_retrain_iters     • is_overfitting ◀── decision step
+                                                  • hp_history            • lr_decay_factor
+                                                  • current_hyperparams   • seed
+                                                 Outputs:                Outputs:
+                                                  • decision ────────────▶ (gate: retrain only)
+                                                    (deploy|retrain|stop)
+                                                  • hp_history ──────────▶ hp_history (to next iter)
+                                                  • is_overfitting ──────▶ is_overfitting
+                                                  • metric_value          • hyperparams_json ──▶ Train (next iter)
+                                                  • next_iteration        • strategy_metadata
 ```
 
 ---
@@ -121,13 +128,20 @@ Outputs:                      Inputs:                       Inputs:
 
 | Parameter | Type | Default | Constraints | Description |
 |-----------|------|---------|-------------|-------------|
-| `ap_threshold` | float | `0.50` | 0.0–1.0 | Minimum AP (IoU=0.50:0.95) to accept model |
-| `max_retrain_iterations` | int | `3` | 1–10 | Maximum retrain attempts before failing |
-| `lr_decay_factor` | float | `0.5` | 0.1–1.0 | Multiply learning rate by this factor on each retry |
-| `unfreeze_on_retry` | bool | `true` | — | Reduce `frozen_stages` by 1 on each retry |
+| `task_type` | string | `detection` | `detection`, `classification`, `llm_finetune` | Task discriminator — routes metric selection, HP adjustment rules, and eval method |
+| `metric_threshold` | float | `0.50` | 0.0–inf | Quality gate — metric must meet this to deploy (detection AP: 0.50, classification accuracy: 0.85, LLM eval_loss: 1.5) |
+| `primary_metric` | string | `auto` | — | Metric for threshold comparison — `auto` resolves per `task_type` (AP, accuracy/top1, eval_loss) |
+| `metric_direction` | string | `auto` | `maximize`, `minimize`, `auto` | Whether higher or lower metric is better |
+| `max_retrain_iterations` | int | `3` | 1–10 | Maximum training iterations before stopping |
+| `tuning_strategy` | string | `schedule` | `schedule`, `grid`, `random` | HP adjustment strategy for retrain iterations |
+| `search_space` | string (JSON) | `auto` | Valid JSON or `auto` | Search space for grid/random strategies — `auto` generates per task_type |
+| `lr_decay_factor` | float | `0.5` | 0.1–1.0 | Multiply learning rate by this factor on each retry (schedule strategy) |
+| `unfreeze_on_retry` | bool | `true` | — | Reduce `frozen_stages` by 1 on each retry (detection only) |
+| `early_stop_min_delta` | float | `0.0` | 0.0–1.0 | Minimum metric improvement between iterations — 0 disables early stopping |
+| `overfitting_detection` | bool | `false` | — | Check train_loss vs eval_loss divergence — sets `is_overfitting` flag for HP adjust step |
+| `warm_start` | bool | `true` | — | Resume from previous checkpoint on retrain (vs fresh start) |
 | `score_threshold` | float | `0.05` | 0.0–1.0 | Detection confidence cutoff for evaluation |
 | `iou_threshold` | float | `0.6` | 0.0–1.0 | NMS IoU threshold for evaluation |
-| `warm_start` | bool | `true` | — | Resume from previous checkpoint on retrain (vs fresh start) |
 
 ---
 
@@ -149,10 +163,10 @@ spec:
       # ... all parameters from Section 4 ...
       - name: current_iteration
         value: "1"
-      - name: current_per_item_lrate
-        value: "{{workflow.parameters.per_item_lrate}}"
-      - name: current_frozen_stages
-        value: "{{workflow.parameters.frozen_stages}}"
+      - name: current_hyperparams
+        value: "{}"  # JSON dict — empty on first iteration, populated by hp-adjust step on retrain
+      - name: hp_history
+        value: "[]"  # JSON array — accumulated by decide step across iterations
 
   templates:
     # ── Main DAG ──────────────────────────────────────────────
@@ -160,8 +174,8 @@ spec:
       inputs:
         parameters:
           - name: current_iteration
-          - name: current_per_item_lrate
-          - name: current_frozen_stages
+          - name: current_hyperparams
+          - name: hp_history
       dag:
         tasks:
           # ── STEP 1: Train ──
@@ -192,11 +206,16 @@ spec:
                 - name: num_epochs
                   value: "{{workflow.parameters.num_epochs}}"
                 - name: per_item_lrate
-                  value: "{{inputs.parameters.current_per_item_lrate}}"
+                  value: "{{workflow.parameters.per_item_lrate}}"
                 - name: frozen_stages
-                  value: "{{inputs.parameters.current_frozen_stages}}"
+                  value: "{{workflow.parameters.frozen_stages}}"
                 - name: pretrained_weights
                   value: "{{workflow.parameters.pretrained_weights}}"
+                - name: hyperparams_json
+                  value: "{{inputs.parameters.current_hyperparams}}"
+                  # JSON dict of HP overrides — "{}" on iteration 1 (use workflow defaults),
+                  # populated by hp-adjust step on retrain. Train step parses this and
+                  # applies overrides on top of named params.
                 # ... remaining training params ...
 
           # ── STEP 2: Evaluate ──
@@ -230,7 +249,7 @@ spec:
                 - name: iou_threshold
                   value: "{{workflow.parameters.iou_threshold}}"
 
-          # ── STEP 3: Decide ──
+          # ── STEP 3: Metric Decision ──
           - name: decide
             depends: "eval.Succeeded"
             templateRef:
@@ -240,25 +259,31 @@ spec:
               parameters:
                 - name: eval_results_json
                   value: "{{tasks.eval.outputs.parameters.eval_results}}"
-                - name: ap_threshold
-                  value: "{{workflow.parameters.ap_threshold}}"
+                - name: task_type
+                  value: "{{workflow.parameters.task_type}}"
+                - name: primary_metric
+                  value: "{{workflow.parameters.primary_metric}}"
+                - name: metric_direction
+                  value: "{{workflow.parameters.metric_direction}}"
+                - name: metric_threshold
+                  value: "{{workflow.parameters.metric_threshold}}"
                 - name: current_iteration
                   value: "{{inputs.parameters.current_iteration}}"
                 - name: max_retrain_iterations
                   value: "{{workflow.parameters.max_retrain_iterations}}"
-                - name: current_per_item_lrate
-                  value: "{{inputs.parameters.current_per_item_lrate}}"
-                - name: current_frozen_stages
-                  value: "{{inputs.parameters.current_frozen_stages}}"
-                - name: lr_decay_factor
-                  value: "{{workflow.parameters.lr_decay_factor}}"
-                - name: unfreeze_on_retry
-                  value: "{{workflow.parameters.unfreeze_on_retry}}"
+                - name: hp_history
+                  value: "{{inputs.parameters.hp_history}}"
+                - name: current_hyperparams
+                  value: "{{inputs.parameters.current_hyperparams}}"
+                - name: early_stop_min_delta
+                  value: "{{workflow.parameters.early_stop_min_delta}}"
+                - name: overfitting_detection
+                  value: "{{workflow.parameters.overfitting_detection}}"
 
-          # ── BRANCH: Pass → Export ──
+          # ── BRANCH: Deploy → Export ──
           - name: export
             depends: "decide.Succeeded"
-            when: "{{tasks.decide.outputs.parameters.decision}} == pass"
+            when: "{{tasks.decide.outputs.parameters.decision}} == deploy"
             templateRef:
               name: <model-export-ps-ref>
               template: <model-export-ps-template>
@@ -275,37 +300,68 @@ spec:
                 - name: config_path
                   value: "{{tasks.train.outputs.parameters.config_path}}"
 
-          # ── BRANCH: Retrain → Recurse ──
-          - name: retrain
+          # ── BRANCH: Retrain → HP Adjust → Recurse ──
+          # ── STEP 4: HP Adjustment (only when decision=retrain) ──
+          - name: hp-adjust
             depends: "decide.Succeeded"
             when: "{{tasks.decide.outputs.parameters.decision}} == retrain"
+            templateRef:
+              name: <hp-adjust-ps-ref>
+              template: <hp-adjust-ps-template>
+            arguments:
+              parameters:
+                - name: hp_history
+                  value: "{{tasks.decide.outputs.parameters.hp_history}}"
+                - name: current_hyperparams
+                  value: "{{inputs.parameters.current_hyperparams}}"
+                - name: task_type
+                  value: "{{workflow.parameters.task_type}}"
+                - name: tuning_strategy
+                  value: "{{workflow.parameters.tuning_strategy}}"
+                - name: search_space
+                  value: "{{workflow.parameters.search_space}}"
+                - name: lr_decay_factor
+                  value: "{{workflow.parameters.lr_decay_factor}}"
+                - name: unfreeze_on_retry
+                  value: "{{workflow.parameters.unfreeze_on_retry}}"
+                - name: is_overfitting
+                  value: "{{tasks.decide.outputs.parameters.is_overfitting}}"
+                - name: seed
+                  value: "{{workflow.parameters.seed}}"
+
+          # ── STEP 5: Recursive Retrain ──
+          - name: retrain
+            depends: "hp-adjust.Succeeded"
             template: autoloop
             arguments:
               parameters:
                 - name: current_iteration
                   value: "{{tasks.decide.outputs.parameters.next_iteration}}"
-                - name: current_per_item_lrate
-                  value: "{{tasks.decide.outputs.parameters.new_per_item_lrate}}"
-                - name: current_frozen_stages
-                  value: "{{tasks.decide.outputs.parameters.new_frozen_stages}}"
+                - name: current_hyperparams
+                  value: "{{tasks.hp-adjust.outputs.parameters.hyperparams_json}}"
+                - name: hp_history
+                  value: "{{tasks.decide.outputs.parameters.hp_history}}"
 
-          # ── BRANCH: Fail → Report ──
+          # ── BRANCH: Stop → Report ──
           - name: report-failure
             depends: "decide.Succeeded"
-            when: "{{tasks.decide.outputs.parameters.decision}} == fail"
+            when: "{{tasks.decide.outputs.parameters.decision}} == stop"
             template: failure-report
             arguments:
               parameters:
-                - name: final_ap
-                  value: "{{tasks.decide.outputs.parameters.ap}}"
+                - name: final_metric
+                  value: "{{tasks.decide.outputs.parameters.metric_value}}"
+                - name: metric_name
+                  value: "{{tasks.decide.outputs.parameters.metric_name}}"
                 - name: iterations_run
-                  value: "{{inputs.parameters.current_iteration}}"
+                  value: "{{tasks.decide.outputs.parameters.current_iteration}}"
 
     # ── Failure Report Template ───────────────────────────────
     - name: failure-report
       inputs:
         parameters:
-          - name: final_ap
+          - name: final_metric
+          - name: metric_name
           - name: iterations_run
       container:
         image: python:3.11-slim
@@ -315,8 +371,9 @@ spec:
             import json, sys
             report = {
               "status": "FAILED",
-              "reason": "AP threshold not met after max iterations",
-              "final_ap": float("{{inputs.parameters.final_ap}}"),
+              "reason": "Metric threshold not met after max iterations",
+              "metric_name": "{{inputs.parameters.metric_name}}",
+              "final_metric": float("{{inputs.parameters.final_metric}}"),
               "iterations_run": int("{{inputs.parameters.iterations_run}}"),
             }
             print(json.dumps(report, indent=2))
@@ -355,6 +412,8 @@ spec:
                   value: "{{workflow.parameters.per_item_lrate}}"
                 - name: frozen_stages
                   value: "{{workflow.parameters.frozen_stages}}"
+                - name: hyperparams_json
+                  value: "{}"
                 # ... remaining training params ...
 
         - - name: eval-1
@@ -377,12 +436,29 @@ spec:
               parameters:
                 - name: eval_results_json
                   value: "{{steps.eval-1.outputs.parameters.eval_results}}"
+                - name: task_type
+                  value: "{{workflow.parameters.task_type}}"
+                - name: primary_metric
+                  value: "{{workflow.parameters.primary_metric}}"
+                - name: metric_direction
+                  value: "{{workflow.parameters.metric_direction}}"
+                - name: metric_threshold
+                  value: "{{workflow.parameters.metric_threshold}}"
                 - name: current_iteration
                   value: "1"
-                # ... remaining decision params ...
+                - name: max_retrain_iterations
+                  value: "{{workflow.parameters.max_retrain_iterations}}"
+                - name: hp_history
+                  value: "[]"
+                - name: current_hyperparams
+                  value: "{}"
+                - name: early_stop_min_delta
+                  value: "{{workflow.parameters.early_stop_min_delta}}"
+                - name: overfitting_detection
+                  value: "{{workflow.parameters.overfitting_detection}}"
 
         - - name: export-1
-            when: "{{steps.decide-1.outputs.parameters.decision}} == pass"
+            when: "{{steps.decide-1.outputs.parameters.decision}} == deploy"
             templateRef:
               name: <model-export-ps-ref>
               template: <model-export-ps-template>
@@ -393,6 +469,32 @@ spec:
                 # ...
 
         # ══════════ Iteration 2 (conditional) ══════════
+        - - name: hp-adjust-1
+            when: "{{steps.decide-1.outputs.parameters.decision}} == retrain"
+            templateRef:
+              name: <hp-adjust-ps-ref>
+              template: <hp-adjust-ps-template>
+            arguments:
+              parameters:
+                - name: hp_history
+                  value: "{{steps.decide-1.outputs.parameters.hp_history}}"
+                - name: current_hyperparams
+                  value: "{}"
+                - name: task_type
+                  value: "{{workflow.parameters.task_type}}"
+                - name: tuning_strategy
+                  value: "{{workflow.parameters.tuning_strategy}}"
+                - name: search_space
+                  value: "{{workflow.parameters.search_space}}"
+                - name: lr_decay_factor
+                  value: "{{workflow.parameters.lr_decay_factor}}"
+                - name: unfreeze_on_retry
+                  value: "{{workflow.parameters.unfreeze_on_retry}}"
+                - name: is_overfitting
+                  value: "{{steps.decide-1.outputs.parameters.is_overfitting}}"
+                - name: seed
+                  value: "{{workflow.parameters.seed}}"
+
         - - name: train-2
             when: "{{steps.decide-1.outputs.parameters.decision}} == retrain"
             templateRef:
@@ -400,11 +502,9 @@ spec:
               template: <yolof-train-ps-template>
             arguments:
               parameters:
-                - name: per_item_lrate
-                  value: "{{steps.decide-1.outputs.parameters.new_per_item_lrate}}"
-                - name: frozen_stages
-                  value: "{{steps.decide-1.outputs.parameters.new_frozen_stages}}"
-                # ...
+                - name: hyperparams_json
+                  value: "{{steps.hp-adjust-1.outputs.parameters.hyperparams_json}}"
+                # ... remaining training params ...
 
         - - name: eval-2
             when: "{{steps.decide-1.outputs.parameters.decision}} == retrain"
@@ -415,7 +515,7 @@ spec:
               parameters:
                 - name: checkpoint_path
                   value: "{{steps.train-2.outputs.parameters.checkpoint_path}}"
-                # ...
+                # ... remaining eval params ...
 
         - - name: decide-2
             when: "{{steps.decide-1.outputs.parameters.decision}} == retrain"
@@ -428,10 +528,14 @@ spec:
                   value: "{{steps.eval-2.outputs.parameters.eval_results}}"
                 - name: current_iteration
                   value: "2"
-                # ...
+                - name: hp_history
+                  value: "{{steps.decide-1.outputs.parameters.hp_history}}"
+                - name: current_hyperparams
+                  value: "{{steps.hp-adjust-1.outputs.parameters.hyperparams_json}}"
+                # ... remaining decision params (same workflow params as decide-1) ...
 
         - - name: export-2
-            when: "{{steps.decide-2.outputs.parameters.decision}} == pass"
+            when: "{{steps.decide-2.outputs.parameters.decision}} == deploy"
             templateRef:
               name: <model-export-ps-ref>
               template: <model-export-ps-template>
@@ -442,6 +546,21 @@ spec:
                 # ...
 
         # ══════════ Iteration 3 (conditional) ══════════
+        - - name: hp-adjust-2
+            when: "{{steps.decide-2.outputs.parameters.decision}} == retrain"
+            templateRef:
+              name: <hp-adjust-ps-ref>
+              template: <hp-adjust-ps-template>
+            arguments:
+              parameters:
+                - name: hp_history
+                  value: "{{steps.decide-2.outputs.parameters.hp_history}}"
+                - name: current_hyperparams
+                  value: "{{steps.hp-adjust-1.outputs.parameters.hyperparams_json}}"
+                - name: is_overfitting
+                  value: "{{steps.decide-2.outputs.parameters.is_overfitting}}"
+                # ... remaining hp-adjust params (same workflow params as hp-adjust-1) ...
+
         - - name: train-3
             when: "{{steps.decide-2.outputs.parameters.decision}} == retrain"
             templateRef:
@@ -449,18 +568,20 @@ spec:
               template: <yolof-train-ps-template>
             arguments:
               parameters:
-                - name: per_item_lrate
-                  value: "{{steps.decide-2.outputs.parameters.new_per_item_lrate}}"
-                - name: frozen_stages
-                  value: "{{steps.decide-2.outputs.parameters.new_frozen_stages}}"
-                # ...
+                - name: hyperparams_json
+                  value: "{{steps.hp-adjust-2.outputs.parameters.hyperparams_json}}"
+                # ... remaining training params ...
 
         - - name: eval-3
             when: "{{steps.decide-2.outputs.parameters.decision}} == retrain"
             templateRef:
               name: <yolof-eval-ps-ref>
               template: <yolof-eval-ps-template>
-            # ...
+            arguments:
+              parameters:
+                - name: checkpoint_path
+                  value: "{{steps.train-3.outputs.parameters.checkpoint_path}}"
+                # ...
 
         - - name: decide-3
             when: "{{steps.decide-2.outputs.parameters.decision}} == retrain"
@@ -469,21 +590,39 @@ spec:
               template: <metric-decision-ps-template>
             arguments:
               parameters:
+                - name: eval_results_json
+                  value: "{{steps.eval-3.outputs.parameters.eval_results}}"
                 - name: current_iteration
                   value: "3"
-                # ...
+                - name: hp_history
+                  value: "{{steps.decide-2.outputs.parameters.hp_history}}"
+                - name: current_hyperparams
+                  value: "{{steps.hp-adjust-2.outputs.parameters.hyperparams_json}}"
+                # ... remaining decision params ...
 
         - - name: export-3
-            when: "{{steps.decide-3.outputs.parameters.decision}} == pass"
+            when: "{{steps.decide-3.outputs.parameters.decision}} == deploy"
             templateRef:
               name: <model-export-ps-ref>
               template: <model-export-ps-template>
-            # ...
+            arguments:
+              parameters:
+                - name: checkpoint_path
+                  value: "{{steps.train-3.outputs.parameters.checkpoint_path}}"
+                # ...
 
         # ══════════ Final failure report ══════════
         - - name: report-failure
-            when: "{{steps.decide-3.outputs.parameters.decision}} == fail"
+            when: "{{steps.decide-3.outputs.parameters.decision}} == stop"
             template: failure-report
+            arguments:
+              parameters:
+                - name: final_metric
+                  value: "{{steps.decide-3.outputs.parameters.metric_value}}"
+                - name: metric_name
+                  value: "{{steps.decide-3.outputs.parameters.metric_name}}"
+                - name: iterations_run
+                  value: "3"
 ```
 
 **Advantages**: Simpler to debug, no recursive template dependency, deterministic step count.
@@ -495,114 +634,31 @@ spec:
 
 ### 6.1 Metric Decision Step (New)
 
-The `metric-decision-ps` is a lightweight, GPU-free pipeline step that reads evaluation results and outputs a routing decision with adjusted hyperparameters.
+The `metric-decision-ps` is a lightweight, GPU-free pipeline step that reads evaluation results, compares metrics against thresholds, and outputs a routing decision (`deploy` / `retrain` / `stop`). It does **not** adjust hyperparameters — that is the responsibility of the HP Adjustment Step.
 
-#### 6.1.1 Interface
+**Full design**: [metric-decision-design.md](metric-decision-design.md)
 
-```python
-class MetricDecision:
-    def decide(
-        self,
-        eval_results_json: str,          # Path to eval_results.json or inline JSON
-        ap_threshold: float = 0.50,      # Minimum AP to accept
-        current_iteration: int = 1,      # Current loop iteration (1-indexed)
-        max_retrain_iterations: int = 3, # Maximum retrain attempts
-        current_per_item_lrate: float = 0.001875,
-        current_frozen_stages: int = 1,
-        lr_decay_factor: float = 0.5,    # LR multiplier on retry
-        unfreeze_on_retry: bool = True,  # Reduce frozen_stages by 1
-    ) -> str:
-        """Returns path to decision.json"""
-```
+Key responsibilities:
+- Resolve primary metric name and direction from `task_type` (or explicit overrides)
+- Compare metric value against configurable threshold
+- Detect early stopping (plateau below `min_delta`)
+- Detect overfitting (train_loss << eval_loss) and pass flag downstream
+- Maintain iteration history (`hp_history` accumulation)
+- Output routing decision + metadata for Argo conditional branching
 
-#### 6.1.2 Decision Logic
+### 6.2 HP Adjustment Step (New)
 
-```python
-# 1. Load evaluation metrics
-eval_results = json.load(open(eval_results_json))
-current_ap = eval_results["metrics"]["AP"]
+The `hp-adjust-ps` is a lightweight, GPU-free pipeline step that generates the next set of hyperparameters when the metric decision step outputs `decision="retrain"`. It is **only invoked on the retrain branch**.
 
-# 2. Compare against threshold
-if current_ap >= ap_threshold:
-    decision = {
-        "decision": "pass",
-        "ap": current_ap,
-        "iteration": current_iteration,
-    }
+**Full design**: [hp-adjustment-design.md](hp-adjustment-design.md)
 
-elif current_iteration >= max_retrain_iterations:
-    decision = {
-        "decision": "fail",
-        "ap": current_ap,
-        "iteration": current_iteration,
-        "reason": f"AP {current_ap:.4f} < {ap_threshold} after {current_iteration} iterations",
-    }
+Key responsibilities:
+- Apply one of three tuning strategies: `schedule` (deterministic decay), `grid` (exhaustive enumeration), or `random` (seeded sampling)
+- Task-aware defaults: each task type (detection, classification, llm_finetune) has its own schedule rules, grid defaults, and random distributions
+- Apply overfitting corrections when `is_overfitting=true` (reduce capacity, increase regularization)
+- Output new hyperparameter JSON for the next training iteration
 
-else:
-    # Adjust hyperparameters
-    new_lr = current_per_item_lrate * lr_decay_factor
-    new_frozen = max(0, current_frozen_stages - 1) if unfreeze_on_retry else current_frozen_stages
-
-    decision = {
-        "decision": "retrain",
-        "ap": current_ap,
-        "iteration": current_iteration,
-        "next_iteration": current_iteration + 1,
-        "new_per_item_lrate": new_lr,
-        "new_frozen_stages": new_frozen,
-        "reason": f"AP {current_ap:.4f} < {ap_threshold}, retrying with lr={new_lr}, frozen={new_frozen}",
-    }
-
-# 3. Write outputs for Argo parameter extraction
-with open("/tmp/decision.json", "w") as f:
-    json.dump(decision, f, indent=2)
-
-# 4. Write individual Argo output parameters
-for key, value in decision.items():
-    path = f"/tmp/{key}"
-    with open(path, "w") as f:
-        f.write(str(value))
-```
-
-#### 6.1.3 Argo Output Parameters
-
-The step must declare output parameters so Argo can extract them:
-
-```yaml
-outputs:
-  parameters:
-    - name: decision
-      valueFrom:
-        path: /tmp/decision
-    - name: ap
-      valueFrom:
-        path: /tmp/ap
-    - name: new_per_item_lrate
-      valueFrom:
-        path: /tmp/new_per_item_lrate
-        default: "0"
-    - name: new_frozen_stages
-      valueFrom:
-        path: /tmp/new_frozen_stages
-        default: "0"
-    - name: next_iteration
-      valueFrom:
-        path: /tmp/next_iteration
-        default: "0"
-```
-
-#### 6.1.4 Compute Requirements
-
-```yaml
-pipeline_step_compute_info:
-  cpu_limit: "1000m"           # 1 CPU core
-  cpu_memory: "2Gi"            # 2 GB RAM
-  num_accelerators: 0          # No GPU
-  accelerator_memory: "0"
-  accelerator_type: []
-```
-
-### 6.2 Modifications to Existing Training Step
+### 6.3 Modifications to Existing Training Step
 
 **File**: `detector-pipeline-yolof-ps/1/models/model/1/model.py`
 **Class**: `MMDetectionYoloF`
@@ -630,7 +686,7 @@ with open("/tmp/config_path", "w") as f:
 
 **Impact**: Additive-only change. Existing single-shot training pipelines are unaffected (the extra files are simply ignored if not consumed).
 
-### 6.3 Modifications to Existing Evaluation Step
+### 6.4 Modifications to Existing Evaluation Step
 
 **File**: `detector-pipeline-eval-yolof-quick-start-ps/1/models/model/1/model.py`
 **Class**: `YOLOFEvaluator`
@@ -669,37 +725,21 @@ with open("/tmp/eval_results", "w") as f:
 
 ## 7. Hyperparameter Adjustment Strategy
 
-### 7.1 Schedule
+The HP adjustment logic is fully decoupled into its own pipeline step (`hp-adjust-ps`). See [hp-adjustment-design.md](hp-adjustment-design.md) for the complete design including:
 
-The decision step applies a **predefined decay schedule** combined with **rule-based backbone unfreezing**:
+- **Three strategies**: `schedule` (deterministic decay), `grid` (exhaustive enumeration), `random` (seeded sampling)
+- **Task-specific rules**: Different schedule rules and default search spaces for detection, classification, and LLM fine-tuning
+- **Overfitting corrections**: Automatic regularization adjustments when overfitting is detected by the metric decision step
+
+### 7.1 Quick Reference — Detection Schedule (Default)
 
 | Iteration | `per_item_lrate` | `frozen_stages` | Effective LR (batch=16) | Rationale |
 |-----------|-----------------|-----------------|------------------------|-----------|
 | 1 (initial) | 0.001875 | 1 | 0.03 | Default training config |
-| 2 (retry 1) | 0.0009375 | 1 | 0.015 | Halve LR to stabilize convergence |
-| 3 (retry 2) | 0.00046875 | 0 | 0.0075 | Halve LR + fully unfreeze backbone |
-| 4 (retry 3) | 0.000234375 | 0 | 0.00375 | Continue halving, full adaptation |
+| 2 (retry 1) | 0.0009375 | 0 | 0.015 | Halve LR + unfreeze backbone |
+| 3 (retry 2) | 0.00046875 | 0 | 0.0075 | Halve LR again |
 
 > **Effective LR formula**: `batch_size × num_gpus × per_item_lrate`
-
-### 7.2 Adjustment Rules
-
-```
-For each retry iteration:
-  1. new_per_item_lrate = current_per_item_lrate × lr_decay_factor
-  2. if unfreeze_on_retry:
-       new_frozen_stages = max(0, current_frozen_stages - 1)
-     else:
-       new_frozen_stages = current_frozen_stages
-  3. num_epochs remains unchanged
-  4. batch_size remains unchanged
-```
-
-### 7.3 Why This Strategy
-
-- **LR halving** is the most common and well-understood recovery strategy when training underperforms — it reduces oscillation around minima and helps convergence on difficult distributions
-- **Backbone unfreezing** allows the model to adapt lower-level features to the target domain, which is critical when the dataset diverges significantly from COCO (the pretrain domain)
-- **Conservative schedule** (only halving, not grid search) avoids excessive compute cost while still covering the most impactful hyperparameter axis
 
 ---
 
@@ -740,7 +780,20 @@ outputs:
         path: /tmp/eval_results
 ```
 
-**Decision step** outputs: (see Section 6.1.3)
+**Decision step** outputs: (see [metric-decision-design.md](metric-decision-design.md), Section 3.3)
+
+**HP Adjust step** outputs:
+```yaml
+outputs:
+  parameters:
+    - name: hyperparams_json
+      valueFrom:
+        path: /tmp/hyperparams_json
+    - name: strategy_metadata
+      valueFrom:
+        path: /tmp/strategy_metadata
+        default: "{}"
+```
 
 ---
 
@@ -761,6 +814,17 @@ detector-pipeline-yolof-autoloop/
 │           └── model/
 │               └── 1/
 │                   └── model.py   # MetricDecision.decide() logic
+├── hp-adjust-ps/
+│   ├── config.yaml                # Pipeline step compute config (CPU-only)
+│   ├── Dockerfile                 # Lightweight Python 3.11 image
+│   ├── requirements.txt           # Minimal: clarifai SDK only
+│   └── 1/
+│       ├── pipeline_step.py       # Entry point (reflection pattern)
+│       └── models/
+│           └── model/
+│               └── 1/
+│                   ├── model.py     # HPAdjustment.adjust() logic
+│                   └── strategies.py # schedule/grid/random implementations
 ```
 
 ## 10. Files to Modify
@@ -774,7 +838,7 @@ detector-pipeline-yolof-autoloop/
 
 ## 11. Evaluation Metrics Reference
 
-The eval step computes all 12 standard COCO metrics. Only **AP** (primary) is used for the threshold decision, but all metrics are logged for observability:
+The eval step computes all 12 standard COCO metrics. The **primary metric** used for the threshold decision is configurable via `primary_metric` and `task_type` (default: AP for detection). All metrics are logged for observability:
 
 | Metric | IoU Range | Object Size | Used for Decision |
 |--------|-----------|-------------|-------------------|
@@ -827,12 +891,16 @@ To implement warm-start, the `retrain` DAG task must pass the previous checkpoin
 
 ```yaml
 - name: retrain
-  depends: "decide.Succeeded"
-  when: "{{tasks.decide.outputs.parameters.decision}} == retrain"
+  depends: "hp-adjust.Succeeded"
   template: autoloop
   arguments:
     parameters:
-      # ... adjusted HPs ...
+      - name: current_iteration
+        value: "{{tasks.decide.outputs.parameters.next_iteration}}"
+      - name: current_hyperparams
+        value: "{{tasks.hp-adjust.outputs.parameters.hyperparams_json}}"
+      - name: hp_history
+        value: "{{tasks.decide.outputs.parameters.hp_history}}"
       - name: pretrained_weights
         value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
 ```
@@ -850,7 +918,7 @@ The training step already supports arbitrary checkpoint paths via the `pretraine
 | Eval produces 0 detections | AP = 0.0, triggers retrain | Retrain with adjusted HPs |
 | Eval step OOM | Argo pod exit code 137 | Reduce eval `batch_size` (manual intervention) |
 | Dataset download timeout | Step fails with non-zero exit | Argo `retryStrategy` on train step (max 2 retries) |
-| Max iterations exhausted | Decision step outputs `"fail"` | `report-failure` step logs summary, workflow exits with error |
+| Max iterations exhausted | Decision step outputs `"stop"` | `report-failure` step logs summary, workflow exits with error |
 | Checkpoint file missing | Eval step fails on file not found | Argo default retry or manual re-trigger |
 
 ---
@@ -864,9 +932,9 @@ Assuming a single **g5.xlarge** (1× A10G GPU, 24 GiB VRAM) instance on AWS:
 | Pass on iteration 1 | ~2h (train) + ~0.5h (eval) = **2.5h** | ~$2.50 |
 | Pass on iteration 2 | ~5h | ~$5.00 |
 | Fail after 3 iterations | ~7.5h | ~$7.50 |
-| Decision step (all iterations) | 0 GPU hours (CPU only) | ~$0.02 |
+| Decision + HP adjust steps (all iterations) | 0 GPU hours (CPU only) | ~$0.04 |
 
-> The decision step adds negligible cost since it runs on CPU-only compute.
+> The decision and HP adjust steps add negligible cost since they both run on CPU-only compute (< 2 seconds each).
 
 ---
 
@@ -874,16 +942,24 @@ Assuming a single **g5.xlarge** (1× A10G GPU, 24 GiB VRAM) instance on AWS:
 
 | # | Test | Method | Expected Result |
 |---|------|--------|-----------------|
-| 1 | Decision logic — pass path | Unit test with `AP=0.65`, `threshold=0.50` | `decision="pass"` |
-| 2 | Decision logic — retrain path | Unit test with `AP=0.30`, `threshold=0.50`, `iter=1`, `max=3` | `decision="retrain"`, `new_lr=0.0009375` |
-| 3 | Decision logic — fail path | Unit test with `AP=0.30`, `threshold=0.50`, `iter=3`, `max=3` | `decision="fail"` |
-| 4 | LR math | Unit test: `0.001875 × 0.5 × 0.5 × 0.5` | `0.000234375` |
-| 5 | Frozen stages floor | Unit test: `frozen=1`, 3 decrements | `1 → 0 → 0 → 0` (floors at 0) |
-| 6 | Argo YAML validity | `argo lint config.yaml` | No errors |
-| 7 | Forced retrain cycle | Deploy with `ap_threshold=0.99`, `max_retrain_iterations=1` | 1 train + 1 eval + 1 retrain + 1 eval |
-| 8 | End-to-end (quick-start) | Use artifact dataset, `max_retrain_iterations=2` | Full loop completes without manual intervention |
-| 9 | Parameter chain | Verify Argo output params from each step propagate correctly | No missing/empty params |
-| 10 | Backward compatibility | Run existing single-shot training pipeline | No regressions from train/eval step modifications |
+| 1 | Decision logic — deploy path | Unit test: `AP=0.65`, `threshold=0.50` | `decision="deploy"` |
+| 2 | Decision logic — retrain path | Unit test: `AP=0.30`, `threshold=0.50`, `iter=1`, `max=3` | `decision="retrain"`, `is_overfitting="false"` |
+| 3 | Decision logic — stop path (max iters) | Unit test: `AP=0.30`, `threshold=0.50`, `iter=3`, `max=3` | `decision="stop"` |
+| 4 | Decision logic — stop path (plateau) | Unit test: AP improves by 0.005, `early_stop_min_delta=0.01` | `decision="stop"`, reason contains "Plateau" |
+| 5 | Decision logic — overfitting detection | Unit test: `train_loss=0.5`, `eval_loss=2.0`, `overfitting_detection=true` | `is_overfitting="true"` |
+| 6 | Metric resolution — auto detection | Unit test: `task_type="detection"`, `primary_metric="auto"` | `metric_name="AP"`, `direction="maximize"` |
+| 7 | Metric resolution — auto LLM | Unit test: `task_type="llm_finetune"`, `primary_metric="auto"` | `metric_name="eval_loss"`, `direction="minimize"` |
+| 8 | HP adjust — schedule detection | Unit test: `LR=0.001875`, `factor=0.5`, `frozen=1` | `LR=0.0009375`, `frozen=0` |
+| 9 | HP adjust — schedule LLM | Unit test: `LR=2e-4`, `lora_r=16` | `LR=1e-4`, `lora_r=32` |
+| 10 | HP adjust — grid skip tried | Unit test: 1 combo tried, 6-combo grid | Returns 2nd untried combo |
+| 11 | HP adjust — random deterministic | Unit test: `seed=42`, same history | Same output on repeated calls |
+| 12 | HP adjust — overfit corrections | Unit test: `is_overfitting=true`, detection | `num_epochs` halved |
+| 13 | History accumulation | Unit test: 2 prior entries, decide outputs retrain | History has 3 entries |
+| 14 | Argo YAML validity | `argo lint config.yaml` | No errors |
+| 15 | Forced retrain cycle | Deploy with `metric_threshold=0.99`, `max_retrain_iterations=2` | train → eval → decide → hp-adjust → train → eval → decide |
+| 16 | End-to-end (quick-start) | Use artifact dataset, `max_retrain_iterations=2` | Full loop completes without manual intervention |
+| 17 | Parameter chain | Verify Argo output params from each step propagate correctly | No missing/empty params |
+| 18 | Backward compatibility | Run existing single-shot training pipeline | No regressions from train/eval step modifications |
 
 ---
 
@@ -897,11 +973,15 @@ Assuming a single **g5.xlarge** (1× A10G GPU, 24 GiB VRAM) instance on AWS:
 
 4. **Multi-metric thresholds**: Support compound conditions like `AP >= 0.50 AND AP50 >= 0.70` for stricter quality gates.
 
-5. **Hyperparameter search**: Replace the fixed schedule with Bayesian optimization (Optuna) or grid search over LR/frozen_stages/batch_size — run parallel training experiments in a single iteration.
+5. **Bayesian optimization**: Add an Optuna-based `"bayesian"` tuning strategy that models the HP→metric relationship and proposes smarter candidates than grid/random.
 
-6. **Model versioning & comparison**: Store all iteration checkpoints with metadata in the Clarifai artifact store, enabling post-hoc analysis of the training trajectory.
+6. **Parallel HP trials**: Use Argo's `withParam` fan-out to run N training jobs in parallel per iteration (grid/random strategies output N HP sets instead of 1).
 
-7. **Early stopping within training**: Add MMEngine hooks to monitor validation loss during training and stop early if the model plateaus, reducing per-iteration compute cost.
+7. **LLM-guided HP selection**: A future `"llm_guided"` strategy that sends history + search space to an LLM API for context-aware HP suggestions.
+
+8. **Model versioning & comparison**: Store all iteration checkpoints with metadata in the Clarifai artifact store, enabling post-hoc analysis of the training trajectory.
+
+9. **Early stopping within training**: Add MMEngine hooks to monitor validation loss during training and stop early if the model plateaus, reducing per-iteration compute cost.
 
 ---
 
