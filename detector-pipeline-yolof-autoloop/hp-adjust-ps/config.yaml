@@ -1,0 +1,37 @@
+pipeline_step:
+  id: "hp-adjust-ps"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  visibility:
+    gettable: PUBLIC
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "1000m"
+  cpu_memory: "2Gi"
+  num_accelerators: 0
+  accelerator_memory: "0"
+  accelerator_type: []
+
+pipeline_step_input_params:
+  - name: hp_history
+    description: "JSON array of prior iteration records from metric-decision step"
+  - name: current_hyperparams
+    description: "JSON object of hyperparameters used in current iteration"
+  - name: task_type
+    description: "Task type: detection, classification, or llm_finetune"
+  - name: tuning_strategy
+    description: "HP tuning strategy: schedule, grid, or random"
+  - name: search_space
+    description: "JSON search space definition or 'auto' for task-type defaults"
+  - name: lr_decay_factor
+    description: "Learning rate decay multiplier per iteration (schedule strategy)"
+  - name: unfreeze_on_retry
+    description: "Reduce frozen backbone stages on each retry (detection only)"
+  - name: is_overfitting
+    description: "Whether overfitting was detected by the metric-decision step"
+  - name: seed
+    description: "Random seed for grid/random strategies"
