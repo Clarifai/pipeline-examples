@@ -139,7 +139,6 @@ Outputs:                Inputs:                  Inputs:                  Inputs
 | `unfreeze_on_retry` | bool | `true` | — | Reduce `frozen_stages` by 1 on each retry (detection only) |
 | `early_stop_min_delta` | float | `0.0` | 0.0–1.0 | Minimum metric improvement between iterations — 0 disables early stopping |
 | `overfitting_detection` | bool | `false` | — | Check train_loss vs eval_loss divergence — sets `is_overfitting` flag for HP adjust step |
-| `warm_start` | bool | `true` | — | Resume from previous checkpoint on retrain (vs fresh start) |
 | `score_threshold` | float | `0.05` | 0.0–1.0 | Detection confidence cutoff for evaluation |
 | `iou_threshold` | float | `0.6` | 0.0–1.0 | NMS IoU threshold for evaluation |
 
@@ -857,11 +856,26 @@ The eval step computes all 12 standard COCO metrics. The **primary metric** used
 
 ---
 
-## 12. Warm-Start vs Cold-Start Retraining
+## 12. Cold-Start Retraining (Current) & Warm-Start (Future)
 
-### Option A: Warm-Start (Recommended)
+### Current Behavior: Cold-Start
 
-On retrain, resume from the checkpoint produced by the previous iteration:
+On retrain, each iteration starts fresh from the original pretrained weights (e.g., COCO checkpoint):
+
+```
+Iteration 1: pretrained_weights="coco" → train → checkpoint_v1.pth (fails threshold)
+Iteration 2: pretrained_weights="coco" → train with lower LR → checkpoint_v2.pth
+Iteration 3: pretrained_weights="coco" → train with lower LR + unfrozen backbone → checkpoint_v3.pth
+```
+
+**Pros**: Each iteration is independent, no compounding errors from a diverged initial training.
+**Cons**: Slower, wastes prior compute.
+
+This is the current implementation across all autoloop pipelines. The training step's `pretrained_weights` parameter only supports keyed values (`"coco"`, `"None"`) that map to artifact downloads via `pretrained_weights_artifacts`. It does not accept arbitrary filesystem checkpoint paths.
+
+### Future Enhancement: Warm-Start
+
+Warm-start would resume from the checkpoint produced by the previous iteration:
 
 ```
 Iteration 1: pretrained_weights="coco" → train → checkpoint_v1.pth
@@ -872,24 +886,13 @@ Iteration 3: load checkpoint_v2.pth → train with lower LR + unfrozen backbone 
 **Pros**: Faster convergence, previous training compute is not wasted.
 **Cons**: Risk of compounding errors if initial training diverged badly.
 
-### Option B: Cold-Start
+To implement warm-start in the future, two changes would be needed:
 
-On retrain, always start fresh from the pretrained COCO weights:
-
-```
-Iteration 1: pretrained_weights="coco" → train → checkpoint_v1.pth (fails)
-Iteration 2: pretrained_weights="coco" → train with lower LR → checkpoint_v2.pth
-Iteration 3: pretrained_weights="coco" → train with lower LR + unfrozen backbone → checkpoint_v3.pth
-```
-
-**Pros**: Each iteration is independent, no compounding errors.
-**Cons**: Slower, wastes prior compute.
-
-**Design Choice**: Use warm-start by default (`warm_start=true`), with cold-start available as a fallback parameter.
-
-To implement warm-start, the `retrain` DAG task must pass the previous checkpoint path:
+1. **Training step**: Add support for an optional `checkpoint_path` parameter that, when provided, is used as `load_from` directly — bypassing the `pretrained_weights_artifacts` lookup.
+2. **Autoloop config**: Forward the train step's `checkpoint_path` output to the next iteration's train step input, and add a `warm_start` workflow parameter to gate this behavior.
 
 ```yaml
+# Future: warm-start retrain task
 - name: retrain
   depends: "hp-adjust.Succeeded"
   template: autoloop
@@ -901,11 +904,10 @@ To implement warm-start, the `retrain` DAG task must pass the previous checkpoin
         value: "{{tasks.hp-adjust.outputs.parameters.hyperparams_json}}"
       - name: hp_history
         value: "{{tasks.decide.outputs.parameters.hp_history}}"
-      - name: pretrained_weights
-        value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
+      # Future: pass previous checkpoint for warm-start
+      # - name: checkpoint_path
+      #   value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
 ```
-
-The training step already supports arbitrary checkpoint paths via the `pretrained_weights` parameter — when set to a file path instead of `"coco"`, it loads that checkpoint directly.
 
 ---
 
@@ -982,6 +984,8 @@ Assuming a single **g5.xlarge** (1× A10G GPU, 24 GiB VRAM) instance on AWS:
 8. **Model versioning & comparison**: Store all iteration checkpoints with metadata in the Clarifai artifact store, enabling post-hoc analysis of the training trajectory.
 
 9. **Early stopping within training**: Add MMEngine hooks to monitor validation loss during training and stop early if the model plateaus, reducing per-iteration compute cost.
+
+10. **Warm-start retraining**: Resume from the previous iteration's checkpoint instead of cold-starting from pretrained weights each time. Requires adding a `checkpoint_path` input parameter to the training step and forwarding checkpoint outputs between autoloop iterations (see Section 12 for details).
 
 ---
 

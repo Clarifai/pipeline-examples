@@ -70,8 +70,6 @@ pipeline:
               value: "0.0"
             - name: overfitting_detection
               value: "false"
-            - name: warm_start
-              value: "true"
             - name: score_threshold
               value: "0.05"
             - name: iou_threshold

@@ -78,8 +78,6 @@ pipeline:
               value: "0.01"
             - name: overfitting_detection
               value: "true"
-            - name: warm_start
-              value: "true"
             # ── Loop state parameters ──
             - name: current_iteration
               value: "1"
