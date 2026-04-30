@@ -19,7 +19,7 @@ pipeline:
             - name: app_id
               value: "<YOUR_APP_ID>"
             - name: model_id
-              value: "<YOUR_MODEL_ID>"
+              value: "test_model"
             - name: base_model_name
               value: "unsloth/Qwen3-0.6B"
             - name: dataset_name
