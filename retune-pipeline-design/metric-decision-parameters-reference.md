@@ -117,10 +117,12 @@ The current loop iteration counter, 1-indexed. Used to determine if max iteratio
 |---|---|
 | **Type** | int |
 | **Default** | `3` |
-| **Constraints** | 1–10 |
+| **Constraints** | 0–10 |
 | **Source** | Workflow parameter |
 
 Maximum number of training iterations (including the initial run). When `current_iteration >= max_retrain_iterations` and the metric still doesn't meet the threshold, the step outputs `decision="stop"`.
+
+Set to `0` for a no-retrain quality gate: the pipeline will deploy if the metric passes, or stop immediately if it doesn't.
 
 Total training runs = up to `max_retrain_iterations`. Cost ceiling: `max_retrain_iterations × (train_cost + eval_cost)`.
 

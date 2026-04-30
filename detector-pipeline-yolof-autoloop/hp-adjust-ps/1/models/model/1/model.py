@@ -115,10 +115,16 @@ class HPAdjustment:
 
         # ── Apply overfitting corrections ──
         overfit_applied = False
+        overfit_changes = {}
         if is_overfitting:
             pre_overfit = new_hps.copy()
             new_hps = apply_overfit_corrections(new_hps, task_type)
-            overfit_applied = any(new_hps.get(k) != pre_overfit.get(k) for k in new_hps)
+            overfit_changes = {
+                k: {"from": pre_overfit.get(k), "to": v}
+                for k, v in new_hps.items()
+                if pre_overfit.get(k) != v
+            }
+            overfit_applied = bool(overfit_changes)
 
         # ── Build metadata ──
         metadata = {
@@ -127,6 +133,7 @@ class HPAdjustment:
             "iteration": iteration,
             "changes": changes,
             "overfit_adjustments": overfit_applied,
+            "overfit_changes": overfit_changes,
             "search_space_used": resolved_space if tuning_strategy != "schedule" else None,
             "seed": seed if tuning_strategy in ("grid", "random") else None,
         }

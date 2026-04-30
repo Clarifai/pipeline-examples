@@ -5,7 +5,7 @@ primary_metric,Input,string,auto,,Workflow param,"Metric name for threshold comp
 metric_direction,Input,string,auto,"maximize,minimize,auto",Workflow param,"Whether higher or lower metric is better — auto-resolves from task_type or metric name patterns (loss→minimize, accuracy→maximize)"
 metric_threshold,Input,float,0.50,0.0–inf,Workflow param,"Quality gate — metric must meet this to trigger deploy (detection: 0.50, classification: 0.85, LLM: 1.5)"
 current_iteration,Loop State,int,1,1+,Workflow param or prior decide output,Current loop iteration counter (1-indexed)
-max_retrain_iterations,Loop State,int,3,1–10,Workflow param,Maximum retrain attempts before outputting decision=stop
+max_retrain_iterations,Loop State,int,3,0–10,Workflow param,Maximum training iterations before outputting decision=stop (0 = no retrain — deploy-or-stop quality gate only)
 hp_history,Loop State,string (JSON),[],Valid JSON array,Prior decide step output,JSON array of previous iteration records — this step appends the current iteration before outputting
 current_hyperparams,Loop State,string (JSON),{},Valid JSON object,Workflow param or prior hp-adjust output,Current iteration's hyperparameters — stored in history for tracking only (not modified by this step)
 early_stop_min_delta,Stopping,float,0.0,0.0–1.0,Workflow param,Minimum metric improvement between consecutive iterations — 0 disables early stopping

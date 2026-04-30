@@ -132,7 +132,7 @@ Outputs:                Inputs:                  Inputs:                  Inputs
 | `metric_threshold` | float | `0.50` | 0.0–inf | Quality gate — metric must meet this to deploy (detection AP: 0.50, classification accuracy: 0.85, LLM eval_loss: 1.5) |
 | `primary_metric` | string | `auto` | — | Metric for threshold comparison — `auto` resolves per `task_type` (AP, accuracy/top1, eval_loss) |
 | `metric_direction` | string | `auto` | `maximize`, `minimize`, `auto` | Whether higher or lower metric is better |
-| `max_retrain_iterations` | int | `3` | 1–10 | Maximum training iterations before stopping |
+| `max_retrain_iterations` | int | `3` | 0–10 | Maximum training iterations before stopping (0 = no retrain, deploy-or-stop quality gate only) |
 | `tuning_strategy` | string | `schedule` | `schedule`, `grid`, `random` | HP adjustment strategy for retrain iterations |
 | `search_space` | string (JSON) | `auto` | Valid JSON or `auto` | Search space for grid/random strategies — `auto` generates per task_type |
 | `lr_decay_factor` | float | `0.5` | 0.1–1.0 | Multiply learning rate by this factor on each retry (schedule strategy) |

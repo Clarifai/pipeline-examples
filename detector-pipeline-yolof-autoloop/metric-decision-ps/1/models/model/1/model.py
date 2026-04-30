@@ -73,9 +73,16 @@ class MetricDecision:
         metric_name, direction = self._resolve_metric(
             primary_metric, metric_direction, task_type
         )
-        current_value = metrics.get(metric_name, 0.0)
+        if metric_name not in metrics:
+            logging.warning(
+                f"[Iteration {current_iteration}] Metric '{metric_name}' not found in "
+                f"eval results. Available: {list(metrics.keys())}"
+            )
+            current_value = None
+        else:
+            current_value = metrics[metric_name]
         logging.info(
-            f"[Iteration {current_iteration}] {metric_name} = {current_value:.4f} "
+            f"[Iteration {current_iteration}] {metric_name} = {current_value} "
             f"(threshold: {metric_threshold}, direction: {direction})"
         )
 
@@ -83,7 +90,15 @@ class MetricDecision:
         reason = ""
         is_overfit = False
 
-        if self._metric_passes(current_value, metric_threshold, direction):
+        if current_value is None:
+            if current_iteration >= max_retrain_iterations:
+                decision = "stop"
+                reason = f"Metric '{metric_name}' missing from eval results after {current_iteration} iterations"
+            else:
+                decision = "retrain"
+                reason = f"Metric '{metric_name}' missing from eval results"
+
+        elif self._metric_passes(current_value, metric_threshold, direction):
             decision = "deploy"
             reason = f"{metric_name} {current_value:.4f} meets threshold {metric_threshold}"
 
@@ -124,7 +139,7 @@ class MetricDecision:
 
         outputs = {
             "decision": decision,
-            "metric_value": f"{current_value:.6f}",
+            "metric_value": f"{current_value:.6f}" if current_value is not None else "N/A",
             "metric_name": metric_name,
             "hp_history": json.dumps(history),
             "is_overfitting": str(is_overfit).lower(),
@@ -153,6 +168,11 @@ class MetricDecision:
     @staticmethod
     def _resolve_metric(primary_metric, metric_direction, task_type):
         if primary_metric == "auto":
+            if task_type not in METRIC_DEFAULTS:
+                raise ValueError(
+                    f"Unknown task_type '{task_type}'. "
+                    f"Allowed values: {list(METRIC_DEFAULTS.keys())}"
+                )
             primary_metric = METRIC_DEFAULTS[task_type]["metric"]
         if metric_direction == "auto":
             if any(p in primary_metric.lower() for p in MINIMIZE_PATTERNS):
