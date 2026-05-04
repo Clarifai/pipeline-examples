@@ -1,0 +1,31 @@
+Parameter,Category,Type,Default,Constraints,Source,Description
+eval_results_json,Input,string,,Required,Eval step output,Path to eval_results.json from evaluation step — must contain a "metrics" dict
+task_type,Task Context,string,detection,"detection,classification,llm_finetune,or custom",Workflow param,Task type — determines default metric/direction and fallback strategy dispatch. Custom values supported when task_description is provided.
+task_description,Task Context,string,"",,Workflow param,"Free-text description of the task and goals — included in LLM prompt for domain context (e.g., ""Fine-tuning a food classifier for mobile with latency constraints"")"
+primary_metric,Task Context,string,auto,,Workflow param,"Metric name for threshold comparison — 'auto' resolves per task_type (detection: AP, classification: accuracy/top1, llm_finetune: eval_loss)"
+metric_direction,Task Context,string,auto,"maximize,minimize,auto",Workflow param,"Whether higher or lower metric is better — auto-resolves from task_type or metric name patterns (loss→minimize, accuracy→maximize)"
+metric_threshold,Task Context,float,0.50,0.0–inf,Workflow param,"Quality gate — metric must meet this to trigger deploy (detection: 0.50, classification: 0.85, LLM: 1.5)"
+current_iteration,Loop State,int,1,1+,Workflow param or prior output,Current loop iteration counter (1-indexed) — included in prompt for budget awareness
+max_retrain_iterations,Loop State,int,3,0–10,Workflow param,Maximum training iterations before stop (0 = deploy-or-stop gate only). LLM uses this to gauge exploration budget.
+hp_history,Loop State,string (JSON),[],Valid JSON array,Prior llm-decide output,"JSON array of all previous iteration records — the FULL history is passed to the LLM for trend analysis. Each entry: {iteration, hyperparams, metrics, decision, reason, reasoning, method}"
+current_hyperparams,Loop State,string (JSON),{},Valid JSON object,Workflow param or prior output,Current iteration's hyperparameters — shown to LLM as the baseline to adjust
+search_space,HP Context,string (JSON or "auto"),auto,"Valid JSON or ""auto""",Workflow param,"Available HP ranges for the LLM to choose from. Auto resolves task-specific defaults. Grid format: {""param"": [v1,v2]}. Random format: {""param"": {""type"": ""log_uniform"", ""low"": 1e-5, ""high"": 1e-2}}. LLM sees bounds and must stay within them."
+tuning_strategy,Fallback,string,schedule,"schedule,grid,random",Workflow param,HP adjustment strategy used by fallback only (LLM chooses its own approach). Determines fallback behavior when LLM is unavailable.
+lr_decay_factor,Fallback,float,0.5,0.1–1.0,Workflow param,Fallback schedule strategy: multiply LR by this factor each iteration
+unfreeze_on_retry,Fallback,bool,true,,Workflow param,Fallback schedule strategy: reduce frozen_stages by 1 for vision detection tasks
+early_stop_min_delta,Fallback,float,0.0,0.0–1.0,Workflow param,Fallback early stop: minimum improvement between consecutive iterations. 0 disables. LLM does its own trend analysis instead.
+overfitting_detection,Fallback,bool,false,,Workflow param,Fallback overfitting detection: check train_loss vs eval_loss divergence. LLM assesses overfitting from full metric history instead.
+llm_model_url,LLM Config,string,"",,Workflow param,"Clarifai model URL for LLM inference (e.g., https://clarifai.com/openai/chat-completion/models/gpt-oss-120b). Empty string = use fallback only (no LLM)."
+llm_temperature,LLM Config,float,0.1,0.0–2.0,Workflow param,LLM sampling temperature — lower values (0.0–0.2) produce more deterministic decisions. Higher values increase exploration in HP suggestions.
+llm_max_retries,LLM Config,int,3,1–10,Workflow param,Maximum retry attempts when LLM returns invalid/unparseable output. After exhausting retries the step falls back to hardcoded logic.
+seed,Reproducibility,int,42,0+,Workflow param,Random seed for fallback grid/random strategies — uses (seed + iteration) for deterministic reproducibility
+decision,Output,string,,"deploy,retrain,stop",Written to /tmp/decision,Routing decision for Argo conditional branching — produced by LLM or fallback
+hyperparams_json,Output,string (JSON),,Valid JSON object,Written to /tmp/hyperparams_json,"Next hyperparameter set for retraining (only meaningful when decision=retrain). Produced by LLM with validation+clamping, or by fallback strategy."
+reasoning,Output,string,,,Written to /tmp/reasoning,"LLM explanation of the decision (2–4 sentences). Includes trend analysis, tradeoff assessment. Prefixed with [FALLBACK] when using fallback path."
+metric_value,Output,string (float),,Non-negative,Written to /tmp/metric_value,Current primary metric value (formatted to 6 decimal places)
+metric_name,Output,string,,,Written to /tmp/metric_name,Resolved primary metric name (e.g. AP or accuracy/top1 or eval_loss)
+hp_history (out),Output,string (JSON),,Valid JSON array,Written to /tmp/hp_history,"Updated history with current iteration appended — includes reasoning and method fields for observability"
+is_overfitting,Output,string (bool),false,"true,false",Written to /tmp/is_overfitting,"Whether overfitting was detected — assessed by LLM from metric trends, or by fallback from train/eval loss ratio"
+current_iteration (out),Output,string (int),,1+,Written to /tmp/current_iteration,Passthrough of current iteration for downstream reference
+next_iteration,Output,string (int),,2+,Written to /tmp/next_iteration,Incremented iteration counter for recursive retrain call
+strategy_metadata,Output,string (JSON),,Valid JSON object,Written to /tmp/strategy_metadata,"Debug metadata: {method: llm|fallback, model_url, temperature, attempts, latency_ms, prompt_tokens, completion_tokens, fallback_reason, ...}"

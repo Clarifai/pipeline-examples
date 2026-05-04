@@ -74,6 +74,15 @@ pipeline:
               value: "0.0"
             - name: overfitting_detection
               value: "false"
+            # ── LLM decision parameters ──
+            - name: llm_model_url
+              value: ""
+            - name: task_description
+              value: "Image classification model (ResNet) training with top-k accuracy metrics."
+            - name: llm_temperature
+              value: "0.1"
+            - name: llm_max_retries
+              value: "3"
             # ── Loop state parameters ──
             - name: current_iteration
               value: "1"
@@ -152,18 +161,20 @@ pipeline:
                       - name: train_work_dir
                         value: "{{tasks.train.outputs.parameters.work_dir}}"
 
-                # ── STEP 3: Metric Decision ──
-                - name: decide
+                # ── STEP 3: LLM Decision (replaces metric-decision + hp-adjust) ──
+                - name: llm-decide
                   depends: "eval.Succeeded"
                   templateRef:
-                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/metric-decision-ps/versions/<METRIC_DECISION_PS_VERSION>
-                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/metric-decision-ps/versions/<METRIC_DECISION_PS_VERSION>
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/llm-decision-ps/versions/<LLM_DECISION_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/llm-decision-ps/versions/<LLM_DECISION_PS_VERSION>
                   arguments:
                     parameters:
                       - name: eval_results_json
                         value: "{{tasks.eval.outputs.parameters.eval_results}}"
                       - name: task_type
                         value: "{{workflow.parameters.task_type}}"
+                      - name: task_description
+                        value: "{{workflow.parameters.task_description}}"
                       - name: primary_metric
                         value: "{{workflow.parameters.primary_metric}}"
                       - name: metric_direction
@@ -178,15 +189,31 @@ pipeline:
                         value: "{{inputs.parameters.hp_history}}"
                       - name: current_hyperparams
                         value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: search_space
+                        value: "{{workflow.parameters.search_space}}"
+                      - name: tuning_strategy
+                        value: "{{workflow.parameters.tuning_strategy}}"
+                      - name: lr_decay_factor
+                        value: "{{workflow.parameters.lr_decay_factor}}"
+                      - name: unfreeze_on_retry
+                        value: "{{workflow.parameters.unfreeze_on_retry}}"
                       - name: early_stop_min_delta
                         value: "{{workflow.parameters.early_stop_min_delta}}"
                       - name: overfitting_detection
                         value: "{{workflow.parameters.overfitting_detection}}"
+                      - name: llm_model_url
+                        value: "{{workflow.parameters.llm_model_url}}"
+                      - name: llm_temperature
+                        value: "{{workflow.parameters.llm_temperature}}"
+                      - name: llm_max_retries
+                        value: "{{workflow.parameters.llm_max_retries}}"
+                      - name: seed
+                        value: "{{workflow.parameters.seed}}"
 
                 # ── BRANCH: Deploy → Export ──
                 - name: export
-                  depends: "decide.Succeeded"
-                  when: "{{tasks.decide.outputs.parameters.decision}} == deploy"
+                  depends: "llm-decide.Succeeded"
+                  when: "{{tasks.llm-decide.outputs.parameters.decision}} == deploy"
                   templateRef:
                     name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-export-ps/versions/<EXPORT_PS_VERSION>
                     template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-export-ps/versions/<EXPORT_PS_VERSION>
@@ -203,60 +230,33 @@ pipeline:
                       - name: config_path
                         value: "{{tasks.train.outputs.parameters.config_path}}"
 
-                # ── STEP 4: HP Adjustment (retrain only) ──
-                - name: hp-adjust
-                  depends: "decide.Succeeded"
-                  when: "{{tasks.decide.outputs.parameters.decision}} == retrain"
-                  templateRef:
-                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/hp-adjust-ps/versions/<HP_ADJUST_PS_VERSION>
-                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/hp-adjust-ps/versions/<HP_ADJUST_PS_VERSION>
-                  arguments:
-                    parameters:
-                      - name: hp_history
-                        value: "{{tasks.decide.outputs.parameters.hp_history}}"
-                      - name: current_hyperparams
-                        value: "{{inputs.parameters.current_hyperparams}}"
-                      - name: task_type
-                        value: "{{workflow.parameters.task_type}}"
-                      - name: tuning_strategy
-                        value: "{{workflow.parameters.tuning_strategy}}"
-                      - name: search_space
-                        value: "{{workflow.parameters.search_space}}"
-                      - name: lr_decay_factor
-                        value: "{{workflow.parameters.lr_decay_factor}}"
-                      - name: unfreeze_on_retry
-                        value: "{{workflow.parameters.unfreeze_on_retry}}"
-                      - name: is_overfitting
-                        value: "{{tasks.decide.outputs.parameters.is_overfitting}}"
-                      - name: seed
-                        value: "{{workflow.parameters.seed}}"
-
-                # ── STEP 5: Recursive Retrain ──
+                # ── STEP 4: Recursive Retrain ──
                 - name: retrain
-                  depends: "hp-adjust.Succeeded"
+                  depends: "llm-decide.Succeeded"
+                  when: "{{tasks.llm-decide.outputs.parameters.decision}} == retrain"
                   template: autoloop
                   arguments:
                     parameters:
                       - name: current_iteration
-                        value: "{{tasks.decide.outputs.parameters.next_iteration}}"
+                        value: "{{tasks.llm-decide.outputs.parameters.next_iteration}}"
                       - name: current_hyperparams
-                        value: "{{tasks.hp-adjust.outputs.parameters.hyperparams_json}}"
+                        value: "{{tasks.llm-decide.outputs.parameters.hyperparams_json}}"
                       - name: hp_history
-                        value: "{{tasks.decide.outputs.parameters.hp_history}}"
+                        value: "{{tasks.llm-decide.outputs.parameters.hp_history}}"
 
                 # ── BRANCH: Stop → Report ──
                 - name: report-failure
-                  depends: "decide.Succeeded"
-                  when: "{{tasks.decide.outputs.parameters.decision}} == stop"
+                  depends: "llm-decide.Succeeded"
+                  when: "{{tasks.llm-decide.outputs.parameters.decision}} == stop"
                   template: failure-report
                   arguments:
                     parameters:
                       - name: final_metric
-                        value: "{{tasks.decide.outputs.parameters.metric_value}}"
+                        value: "{{tasks.llm-decide.outputs.parameters.metric_value}}"
                       - name: metric_name
-                        value: "{{tasks.decide.outputs.parameters.metric_name}}"
+                        value: "{{tasks.llm-decide.outputs.parameters.metric_name}}"
                       - name: iterations_run
-                        value: "{{tasks.decide.outputs.parameters.current_iteration}}"
+                        value: "{{tasks.llm-decide.outputs.parameters.current_iteration}}"
 
           # ── Extract Eval Metrics Template ────────────────────────
           # Inline step: reads MMPretrain train output and produces
