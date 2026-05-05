@@ -148,18 +148,20 @@ pipeline:
                         value: "{{workflow.parameters.seed}}"
                       - name: hyperparams_json
                         value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: skip_export
+                        value: "true"
 
-                # ── STEP 2: Evaluate (inline — extract metrics from train output) ──
-                # NOTE: The ResNet train step produces eval metrics in its work dir.
-                # This inline step reads them and writes eval_results.json for the
-                # decision step. Replace with a dedicated eval pipeline step when available.
+                # ── STEP 2: Evaluate (metrics extracted by train step) ──
+                # When skip_export=True, the train step extracts eval metrics
+                # from the MMPretrain JSON log and writes them as an Argo output
+                # parameter. No separate eval pod is needed.
                 - name: eval
                   depends: "train.Succeeded"
-                  template: extract-eval-metrics
+                  template: passthrough-eval
                   arguments:
                     parameters:
-                      - name: train_work_dir
-                        value: "{{tasks.train.outputs.parameters.work_dir}}"
+                      - name: eval_results
+                        value: "{{tasks.train.outputs.parameters.eval_results}}"
 
                 # ── STEP 3: LLM Decision (replaces metric-decision + hp-adjust) ──
                 - name: llm-decide
@@ -225,10 +227,10 @@ pipeline:
                         value: "{{workflow.parameters.app_id}}"
                       - name: model_id
                         value: "{{workflow.parameters.model_id}}"
-                      - name: checkpoint_path
-                        value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
-                      - name: config_path
-                        value: "{{tasks.train.outputs.parameters.config_path}}"
+                      - name: checkpoint_source
+                        value: "model_artifact"
+                      - name: artifact_id
+                        value: "{{tasks.train.outputs.parameters.artifact_id}}"
 
                 # ── STEP 4: Recursive Retrain ──
                 - name: retrain
@@ -258,15 +260,14 @@ pipeline:
                       - name: iterations_run
                         value: "{{tasks.llm-decide.outputs.parameters.current_iteration}}"
 
-          # ── Extract Eval Metrics Template ────────────────────────
-          # Inline step: reads MMPretrain train output and produces
-          # eval_results.json in the format expected by metric-decision-ps.
-          # Replace this with a dedicated classifier-eval pipeline step
-          # when one becomes available.
-          - name: extract-eval-metrics
+          # ── Passthrough Eval Template ──────────────────────────────
+          # The train step (with skip_export=True) extracts eval metrics
+          # and writes them as an Argo output. This template passes them
+          # through to downstream steps without needing cross-pod file access.
+          - name: passthrough-eval
             inputs:
               parameters:
-                - name: train_work_dir
+                - name: eval_results
             outputs:
               parameters:
                 - name: eval_results
@@ -277,35 +278,12 @@ pipeline:
               command: [python, -c]
               args:
                 - |
-                  import json, glob, os
-
-                  work_dir = "{{inputs.parameters.train_work_dir}}"
-
-                  # MMPretrain writes eval metrics to the training log.
-                  # Look for the last logged eval results in the JSON log file.
-                  log_files = sorted(glob.glob(os.path.join(work_dir, "*.log.json")))
-                  metrics = {}
-
-                  if log_files:
-                      with open(log_files[-1], 'r') as f:
-                          for line in f:
-                              try:
-                                  entry = json.loads(line.strip())
-                                  # MMPretrain logs eval metrics with mode="val"
-                                  if entry.get("mode") == "val":
-                                      metrics = {
-                                          k: v for k, v in entry.items()
-                                          if k not in ("mode", "epoch", "iter", "lr", "step")
-                                      }
-                              except json.JSONDecodeError:
-                                  continue
-
-                  eval_results = {"metrics": metrics}
-                  output_path = "/tmp/eval_results.json"
-                  with open(output_path, 'w') as f:
-                      json.dump(eval_results, f, indent=2)
-
-                  print(f"Extracted metrics: {json.dumps(metrics, indent=2)}")
+                  import json
+                  results = """{{inputs.parameters.eval_results}}"""
+                  with open("/tmp/eval_results.json", "w") as f:
+                      f.write(results)
+                  parsed = json.loads(results)
+                  print(f"Eval metrics: {json.dumps(parsed.get('metrics', {}), indent=2)}")
 
           # ── Failure Report Template ───────────────────────────────
           - name: failure-report
@@ -320,11 +298,16 @@ pipeline:
               args:
                 - |
                   import json, sys
+                  raw_metric = "{{inputs.parameters.final_metric}}"
+                  try:
+                      final_metric = float(raw_metric)
+                  except (ValueError, TypeError):
+                      final_metric = None
                   report = {
                     "status": "FAILED",
                     "reason": "Metric threshold not met after max iterations",
                     "metric_name": "{{inputs.parameters.metric_name}}",
-                    "final_metric": float("{{inputs.parameters.final_metric}}"),
+                    "final_metric": final_metric,
                     "iterations_run": int("{{inputs.parameters.iterations_run}}"),
                   }
                   print(json.dumps(report, indent=2))

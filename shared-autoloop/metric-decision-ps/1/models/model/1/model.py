@@ -181,6 +181,11 @@ class MetricDecision:
                 metric_direction = METRIC_DEFAULTS.get(
                     task_type, {}
                 ).get("direction", "maximize")
+        if metric_direction not in ("maximize", "minimize"):
+            raise ValueError(
+                f"Invalid metric_direction '{metric_direction}'. "
+                f"Must be 'maximize', 'minimize', or 'auto'."
+            )
         return primary_metric, metric_direction
 
     @staticmethod

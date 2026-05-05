@@ -103,11 +103,26 @@ class MMClassificationResNet50(VisualClassifierClass):
               concepts_mutually_exclusive: bool = False,
               pretrained_weights: str = "ImageNet-1k",
               seed: int = -1,
+              skip_export: bool = False,
+              hyperparams_json: str = "{}",
               ) -> str:
         # Get PAT from environment
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
+
+        # Apply HP overrides from autoloop decision step
+        hp_overrides = json.loads(hyperparams_json) if isinstance(hyperparams_json, str) else hyperparams_json
+        if hp_overrides:
+            logging.info(f"Applying hyperparameter overrides: {hp_overrides}")
+            if "per_item_lrate" in hp_overrides:
+                per_item_lrate = float(hp_overrides["per_item_lrate"])
+            if "weight_decay" in hp_overrides:
+                weight_decay = float(hp_overrides["weight_decay"])
+            if "num_epochs" in hp_overrides:
+                num_epochs = int(hp_overrides["num_epochs"])
+            if "batch_size" in hp_overrides:
+                batch_size = int(hp_overrides["batch_size"])
 
         # Convert concepts string to list
         concepts = json.loads(concepts)
@@ -339,24 +354,79 @@ class MMClassificationResNet50(VisualClassifierClass):
             logging.warning(f"config.yaml not found at {config_yaml_path}, skipping benchmark")
 
         # STEP 7: Export and Upload Model to Clarifai
-        logging.info("")
-        logging.info("=" * 80)
-        logging.info("STEP 7: Exporting and Uploading Model to Clarifai")
-        logging.info("=" * 80)
+        if skip_export:
+            logging.info("")
+            logging.info("=" * 80)
+            logging.info("STEP 7: Uploading checkpoint to artifact store (skip_export=True)")
+            logging.info("=" * 80)
 
-        clarifai_api_base = os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com")
+            from model_export_helper import upload_checkpoint_to_artifact
 
-        export_and_upload_classifier(
-            weights_path=self.weights_path,
-            config_py_path=self.config_py_path,
-            classes=concepts,
-            source_model_dir=model_template_dir,
-            clarifai_pat=pat,
-            clarifai_api_base=clarifai_api_base,
-            user_id=user_id,
-            app_id=app_id,
-            model_id=model_id,
-        )
+            upload_checkpoint_to_artifact(
+                self.weights_path, user_id, app_id, model_id
+            )
+
+            # Upload config to artifact store
+            artifact_id = f"{model_id}_checkpoint"
+            ArtifactVersion().upload(
+                file_path=str(self.config_py_path),
+                artifact_id=artifact_id,
+                user_id=user_id, app_id=app_id,
+                visibility="private",
+            )
+
+            # Extract eval metrics from MMPretrain JSON log
+            import glob
+            log_files = sorted(glob.glob(os.path.join(self.work_dir, "*.log.json")))
+            metrics = {}
+            if log_files:
+                with open(log_files[-1], 'r') as f:
+                    for line in f:
+                        try:
+                            entry = json.loads(line.strip())
+                            if entry.get("mode") == "val":
+                                metrics = {
+                                    k: v for k, v in entry.items()
+                                    if k not in ("mode", "epoch", "iter", "lr", "step")
+                                }
+                        except json.JSONDecodeError:
+                            continue
+
+            eval_results = {"metrics": metrics}
+
+            # Write Argo output parameters
+            output_dir = "/tmp"
+            os.makedirs(output_dir, exist_ok=True)
+            outputs = {
+                "checkpoint_path": self.weights_path,
+                "config_path": self.config_py_path,
+                "artifact_id": artifact_id,
+                "eval_results": json.dumps(eval_results),
+            }
+            for key, value in outputs.items():
+                with open(os.path.join(output_dir, key), 'w') as f:
+                    f.write(str(value))
+            logging.info(f"Eval metrics extracted: {metrics}")
+            logging.info("Argo output parameters written to /tmp/")
+        else:
+            logging.info("")
+            logging.info("=" * 80)
+            logging.info("STEP 7: Exporting and Uploading Model to Clarifai")
+            logging.info("=" * 80)
+
+            clarifai_api_base = os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com")
+
+            export_and_upload_classifier(
+                weights_path=self.weights_path,
+                config_py_path=self.config_py_path,
+                classes=concepts,
+                source_model_dir=model_template_dir,
+                clarifai_pat=pat,
+                clarifai_api_base=clarifai_api_base,
+                user_id=user_id,
+                app_id=app_id,
+                model_id=model_id,
+            )
 
         logging.info("")
         logging.info("=" * 80)

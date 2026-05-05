@@ -77,12 +77,14 @@ def _detect_overfitting(eval_results, overfitting_detection):
 def _run_hp_adjust(current_hps, task_type, tuning_strategy, search_space,
                    lr_decay_factor, unfreeze_on_retry, is_overfitting, hp_history, seed):
     """Run HP adjustment logic inline (equivalent to hp-adjust-ps)."""
-    # Add strategies.py from hp-adjust-ps to import path
+    # In Docker container, strategies.py is co-located; in local dev, use sibling path
+    local_dir = os.path.dirname(os.path.abspath(__file__))
     strategies_path = os.path.join(
         _SHARED_AUTOLOOP_DIR, "hp-adjust-ps", "1", "models", "model", "1"
     )
-    if strategies_path not in sys.path:
-        sys.path.insert(0, strategies_path)
+    for path in (local_dir, strategies_path):
+        if path not in sys.path:
+            sys.path.insert(0, path)
 
     from strategies import (
         schedule_select, grid_select, random_select,

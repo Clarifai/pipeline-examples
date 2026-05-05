@@ -621,6 +621,57 @@ class TestOutputFiles:
         assert full["direction"] == "minimize"
 
 
+# ═══════════════════════════════════════════════════════════════
+# MISSING METRIC KEY
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestMissingMetric:
+    def test_missing_metric_retrain(self, decider, tmp_dir):
+        """When expected metric key is absent, decision is retrain (not at max iterations)."""
+        path = _write_eval_json(tmp_dir, {"unrelated_metric": 0.9})
+        decider.decide(
+            eval_results_json=path,
+            task_type="detection",
+            metric_threshold=0.50,
+            current_iteration=1,
+            max_retrain_iterations=3,
+        )
+        assert _read_output("decision") == "retrain"
+        assert _read_output("metric_value") == "N/A"
+        assert _read_output("metric_name") == "AP"
+
+    def test_missing_metric_stop_at_max_iterations(self, decider, tmp_dir):
+        """When metric key is absent at max iterations, decision is stop."""
+        path = _write_eval_json(tmp_dir, {"unrelated_metric": 0.9})
+        decider.decide(
+            eval_results_json=path,
+            task_type="detection",
+            metric_threshold=0.50,
+            current_iteration=3,
+            max_retrain_iterations=3,
+        )
+        assert _read_output("decision") == "stop"
+        assert _read_output("metric_value") == "N/A"
+
+    def test_missing_metric_output_json(self, decider, tmp_dir):
+        """Full output JSON is well-formed when metric is missing."""
+        path = _write_eval_json(tmp_dir, {"other": 0.5})
+        result = decider.decide(
+            eval_results_json=path,
+            task_type="classification",
+            metric_threshold=0.80,
+            current_iteration=1,
+            max_retrain_iterations=3,
+        )
+        with open(result) as f:
+            full = json.load(f)
+        assert full["decision"] == "retrain"
+        assert full["metric_value"] == "N/A"
+        assert full["metric_name"] == "accuracy/top1"
+        assert full["direction"] == "maximize"
+
+
 class TestParser:
     def test_parser_builds(self):
         parser = MetricDecision.to_pipeline_parser()

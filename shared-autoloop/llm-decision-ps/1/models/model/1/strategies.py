@@ -1,3 +1,7 @@
+# NOTE: This file is synced from shared-autoloop/hp-adjust-ps/1/models/model/1/strategies.py
+# It is vendored here so the llm-decision-ps Docker image includes it for fallback logic.
+# Canonical source: shared-autoloop/hp-adjust-ps/1/models/model/1/strategies.py
+
 import itertools
 import json
 import math

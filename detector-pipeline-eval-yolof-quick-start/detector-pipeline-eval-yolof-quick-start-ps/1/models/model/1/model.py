@@ -70,6 +70,10 @@ class YOLOFEvaluator:
         self,
         user_id: str = "clarifai",
         app_id: str = "train_pipelines",
+        model_id: str = "",
+        checkpoint_source: str = "artifact",
+        checkpoint_path: str = "",
+        config_path: str = "",
         dataset_source: str = "artifact",
         dataset_id: str = "",
         dataset_version_id: str = "",
@@ -95,40 +99,86 @@ class YOLOFEvaluator:
         logging.info("Starting YOLOF Evaluation Pipeline")
 
         # ================================================================
-        # STEP 1: Download pretrained checkpoint
+        # STEP 1: Resolve checkpoint
         # ================================================================
         logging.info("")
         logging.info("=" * 80)
-        logging.info("STEP 1: Downloading Pretrained YOLOF Checkpoint")
+        logging.info("STEP 1: Resolving YOLOF Checkpoint")
         logging.info("=" * 80)
 
-        pretrained_weights_artifacts = {
-            'coco': {
-                'artifact_id': 'mmdetectionyolof-coco',
-                'user_id': 'clarifai',
-                'app_id': 'train_pipelines',
-                'version_id': 'efbbbe7f8c7743de9db5e85bba43af2a',
-                'filename': 'yolof_r50_c5_8x8_1x_coco_20210425_024427-8e864411.pth'
+        if checkpoint_source == "path":
+            if not checkpoint_path:
+                raise ValueError("checkpoint_path is required when checkpoint_source='path'")
+            if not os.path.exists(checkpoint_path):
+                raise FileNotFoundError(
+                    f"checkpoint_path '{checkpoint_path}' not found. "
+                    "If running in a separate pod, use checkpoint_source='model_artifact' instead."
+                )
+            checkpoint_root = checkpoint_path
+            logging.info(f"Using provided checkpoint: {checkpoint_root}")
+            if config_path:
+                logging.info(f"Using provided config: {config_path}")
+        elif checkpoint_source == "model_artifact":
+            if not model_id:
+                raise ValueError("model_id is required when checkpoint_source='model_artifact'")
+            artifact_id = f"{model_id}_checkpoint"
+            checkpoint_dir = os.path.join(work_dir, "checkpoint")
+            os.makedirs(checkpoint_dir, exist_ok=True)
+
+            # Download latest checkpoint from artifact store
+            logging.info(f"Downloading checkpoint from artifact: {artifact_id}")
+            versions = ArtifactVersion().list(
+                artifact_id=artifact_id, user_id=user_id, app_id=app_id
+            )
+            if not versions:
+                raise ValueError(f"No checkpoint versions found in artifact '{artifact_id}'")
+            # Get the two most recent versions (checkpoint + config)
+            sorted_versions = sorted(versions, key=lambda v: v.created_at, reverse=True)
+
+            # Download checkpoint (.pth file)
+            checkpoint_root = sorted_versions[0].download(
+                output_path=os.path.join(checkpoint_dir, "checkpoint.pth"),
+                force=True,
+            )
+            logging.info(f"Downloaded checkpoint to {checkpoint_root}")
+
+            # Download config if available (second most recent upload)
+            if len(sorted_versions) >= 2:
+                config_path = sorted_versions[1].download(
+                    output_path=os.path.join(checkpoint_dir, "config.py"),
+                    force=True,
+                )
+                logging.info(f"Downloaded config to {config_path}")
+        elif checkpoint_source == "artifact":
+            pretrained_weights_artifacts = {
+                'coco': {
+                    'artifact_id': 'mmdetectionyolof-coco',
+                    'user_id': 'clarifai',
+                    'app_id': 'train_pipelines',
+                    'version_id': 'efbbbe7f8c7743de9db5e85bba43af2a',
+                    'filename': 'yolof_r50_c5_8x8_1x_coco_20210425_024427-8e864411.pth'
+                }
             }
-        }
 
-        artifact_info = pretrained_weights_artifacts.get(pretrained_weights)
-        if artifact_info is None:
-            raise ValueError(f"Unknown pretrained_weights: {pretrained_weights}. Available: {list(pretrained_weights_artifacts.keys())}")
+            artifact_info = pretrained_weights_artifacts.get(pretrained_weights)
+            if artifact_info is None:
+                raise ValueError(f"Unknown pretrained_weights: {pretrained_weights}. Available: {list(pretrained_weights_artifacts.keys())}")
 
-        checkpoint_dir = "/tmp/pretrain_checkpoints"
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_path = os.path.join(checkpoint_dir, artifact_info['filename'])
-        version = ArtifactVersion()
-        checkpoint_root = version.download(
-            artifact_id=artifact_info['artifact_id'],
-            user_id=artifact_info['user_id'],
-            app_id=artifact_info['app_id'],
-            version_id=artifact_info['version_id'],
-            output_path=checkpoint_path,
-            force=True,
-        )
-        logging.info(f"Downloaded checkpoint to {checkpoint_root}")
+            checkpoint_dir = "/tmp/pretrain_checkpoints"
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint_path = os.path.join(checkpoint_dir, artifact_info['filename'])
+            version = ArtifactVersion()
+            checkpoint_root = version.download(
+                artifact_id=artifact_info['artifact_id'],
+                user_id=artifact_info['user_id'],
+                app_id=artifact_info['app_id'],
+                version_id=artifact_info['version_id'],
+                output_path=checkpoint_path,
+                force=True,
+            )
+            logging.info(f"Downloaded checkpoint to {checkpoint_root}")
+        else:
+            raise ValueError(f"Unknown checkpoint_source: {checkpoint_source}. Must be 'artifact', 'model_artifact', or 'path'")
 
         # ================================================================
         # STEP 2: Download evaluation dataset
@@ -219,7 +269,7 @@ class YOLOFEvaluator:
         # ================================================================
         logging.info("")
         logging.info("=" * 80)
-        logging.info("STEP 3: Generating MMDetection Config")
+        logging.info("STEP 3: Resolving MMDetection Config")
         logging.info("=" * 80)
 
         if keep_aspect_ratio:
@@ -235,18 +285,22 @@ class YOLOFEvaluator:
                 )
             img_scale = tuple(image_size_list)
 
-        config_path = os.path.join(work_dir, 'eval_config.py')
-        config_content = self._get_eval_config(
-            num_classes=num_classes,
-            img_scale=img_scale,
-            keep_aspect_ratio=keep_aspect_ratio,
-            score_threshold=score_threshold,
-            iou_threshold=iou_threshold,
-            checkpoint_path=checkpoint_root,
-        )
-        with open(config_path, 'w') as f:
-            f.write(config_content)
-        logging.info(f"Config generated at {config_path}")
+        if checkpoint_source == "path" and config_path:
+            eval_config_path = config_path
+            logging.info(f"Using provided config: {eval_config_path}")
+        else:
+            eval_config_path = os.path.join(work_dir, 'eval_config.py')
+            config_content = self._get_eval_config(
+                num_classes=num_classes,
+                img_scale=img_scale,
+                keep_aspect_ratio=keep_aspect_ratio,
+                score_threshold=score_threshold,
+                iou_threshold=iou_threshold,
+                checkpoint_path=checkpoint_root,
+            )
+            with open(eval_config_path, 'w') as f:
+                f.write(config_content)
+            logging.info(f"Config generated at {eval_config_path}")
 
         # ================================================================
         # STEP 4: Load model
@@ -267,7 +321,7 @@ class YOLOFEvaluator:
         torch.load = patched_load
         try:
             inferencer = DetInferencer(
-                model=config_path, weights=checkpoint_root, device=device
+                model=eval_config_path, weights=checkpoint_root, device=device
             )
         finally:
             torch.load = original_load

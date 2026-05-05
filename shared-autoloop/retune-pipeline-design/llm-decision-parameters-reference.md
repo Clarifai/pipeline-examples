@@ -348,8 +348,8 @@ When the fallback detects overfitting, it passes `is_overfitting=true` to the HP
 Clarifai model URL for LLM inference. Must point to a text-generation model hosted on the Clarifai platform.
 
 **Examples:**
-- `"https://clarifai.com/openai/chat-completion/models/gpt-oss-120b"` — Recommended default (fast, cheap, good JSON compliance)
-- `"https://clarifai.com/openai/chat-completion/models/gpt-oss-120b"` — Higher quality reasoning
+- `"https://clarifai.com/openai/chat-completion/models/gpt-4o-mini"` — Recommended default (fast, cheap, good JSON compliance)
+- `"https://clarifai.com/openai/chat-completion/models/gpt-4o"` — Higher quality reasoning
 - `"https://clarifai.com/anthropic/completion/models/claude-3_5-sonnet"` — Alternative provider
 
 **Empty string behavior**: When empty, the step skips the LLM entirely and uses the fallback path immediately. This enables running in air-gapped environments or when no LLM budget is available. Functionally equivalent to running `metric-decision-ps` + `hp-adjust-ps` sequentially.
@@ -563,7 +563,7 @@ Debug metadata documenting how the decision was made:
 ```json
 {
   "method": "llm",
-  "model_url": "https://clarifai.com/openai/chat-completion/models/gpt-oss-120b",
+  "model_url": "https://clarifai.com/openai/chat-completion/models/gpt-4o-mini",
   "temperature": 0.1,
   "attempts": 1,
   "prompt_tokens": 2480,

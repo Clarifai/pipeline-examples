@@ -144,6 +144,8 @@ pipeline:
                         value: "{{workflow.parameters.inference_max_batch_size}}"
                       - name: hyperparams_json
                         value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: skip_export
+                        value: "true"
 
                 # ── STEP 2: Evaluate ──
                 - name: eval
@@ -157,12 +159,12 @@ pipeline:
                         value: "{{workflow.parameters.user_id}}"
                       - name: app_id
                         value: "{{workflow.parameters.app_id}}"
+                      - name: model_id
+                        value: "{{workflow.parameters.model_id}}"
                       - name: checkpoint_source
-                        value: "path"
-                      - name: checkpoint_path
-                        value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
-                      - name: config_path
-                        value: "{{tasks.train.outputs.parameters.config_path}}"
+                        value: "model_artifact"
+                      - name: dataset_source
+                        value: "clarifai"
                       - name: dataset_id
                         value: "{{workflow.parameters.dataset_id}}"
                       - name: concepts
@@ -240,10 +242,10 @@ pipeline:
                         value: "{{workflow.parameters.app_id}}"
                       - name: model_id
                         value: "{{workflow.parameters.model_id}}"
-                      - name: checkpoint_path
-                        value: "{{tasks.train.outputs.parameters.checkpoint_path}}"
-                      - name: config_path
-                        value: "{{tasks.train.outputs.parameters.config_path}}"
+                      - name: checkpoint_source
+                        value: "model_artifact"
+                      - name: artifact_id
+                        value: "{{tasks.train.outputs.parameters.artifact_id}}"
 
                 # ── STEP 4: Recursive Retrain ──
                 - name: retrain
@@ -286,11 +288,16 @@ pipeline:
               args:
                 - |
                   import json, sys
+                  raw_metric = "{{inputs.parameters.final_metric}}"
+                  try:
+                      final_metric = float(raw_metric)
+                  except (ValueError, TypeError):
+                      final_metric = None
                   report = {
                     "status": "FAILED",
                     "reason": "Metric threshold not met after max iterations",
                     "metric_name": "{{inputs.parameters.metric_name}}",
-                    "final_metric": float("{{inputs.parameters.final_metric}}"),
+                    "final_metric": final_metric,
                     "iterations_run": int("{{inputs.parameters.iterations_run}}"),
                   }
                   print(json.dumps(report, indent=2))

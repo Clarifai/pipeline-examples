@@ -156,19 +156,20 @@ pipeline:
                         value: "{{workflow.parameters.seed}}"
                       - name: hyperparams_json
                         value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: skip_export
+                        value: "true"
 
-                # ── STEP 2: Evaluate (inline — extract HF Trainer metrics) ──
-                # NOTE: HF SFTTrainer logs eval_loss in trainer_state.json.
-                # This inline step reads it and writes eval_results.json for
-                # the decision step. Replace with a dedicated LLM eval pipeline
-                # step when available.
+                # ── STEP 2: Evaluate (metrics extracted by train step) ──
+                # When skip_export=True, the train step extracts eval metrics
+                # from the HF Trainer state and writes them as an Argo output
+                # parameter. No separate eval pod is needed.
                 - name: eval
                   depends: "train.Succeeded"
-                  template: extract-eval-metrics
+                  template: passthrough-eval
                   arguments:
                     parameters:
-                      - name: train_output_dir
-                        value: "{{tasks.train.outputs.parameters.output_dir}}"
+                      - name: eval_results
+                        value: "{{tasks.train.outputs.parameters.eval_results}}"
 
                 # ── STEP 3: LLM Decision (replaces metric-decision + hp-adjust) ──
                 - name: llm-decide
@@ -234,8 +235,10 @@ pipeline:
                         value: "{{workflow.parameters.app_id}}"
                       - name: model_id
                         value: "{{workflow.parameters.model_id}}"
-                      - name: output_dir
-                        value: "{{tasks.train.outputs.parameters.output_dir}}"
+                      - name: checkpoint_source
+                        value: "model_artifact"
+                      - name: artifact_id
+                        value: "{{tasks.train.outputs.parameters.artifact_id}}"
 
                 # ── STEP 4: Recursive Retrain ──
                 - name: retrain
@@ -265,15 +268,14 @@ pipeline:
                       - name: iterations_run
                         value: "{{tasks.llm-decide.outputs.parameters.current_iteration}}"
 
-          # ── Extract Eval Metrics Template ────────────────────────
-          # Inline step: reads HuggingFace Trainer state and produces
-          # eval_results.json in the format expected by metric-decision-ps.
-          # HF SFTTrainer writes trainer_state.json with log_history entries
-          # containing eval_loss, train_loss, etc.
-          - name: extract-eval-metrics
+          # ── Passthrough Eval Template ──────────────────────────────
+          # The train step (with skip_export=True) extracts eval metrics
+          # and writes them as an Argo output. This template passes them
+          # through to downstream steps without needing cross-pod file access.
+          - name: passthrough-eval
             inputs:
               parameters:
-                - name: train_output_dir
+                - name: eval_results
             outputs:
               parameters:
                 - name: eval_results
@@ -284,40 +286,12 @@ pipeline:
               command: [python, -c]
               args:
                 - |
-                  import json, os, glob
-
-                  output_dir = "{{inputs.parameters.train_output_dir}}"
-
-                  # HF Trainer writes trainer_state.json with log_history
-                  state_path = os.path.join(output_dir, "trainer_state.json")
-                  metrics = {}
-
-                  if os.path.exists(state_path):
-                      with open(state_path, 'r') as f:
-                          state = json.load(f)
-                      log_history = state.get("log_history", [])
-
-                      # Find the last eval entry
-                      for entry in reversed(log_history):
-                          if "eval_loss" in entry:
-                              metrics["eval_loss"] = entry["eval_loss"]
-                              if "eval_runtime" in entry:
-                                  metrics["eval_runtime"] = entry["eval_runtime"]
-                              if "perplexity" in entry:
-                                  metrics["perplexity"] = entry["perplexity"]
-                              break
-
-                      # Find the last train entry for overfitting detection
-                      for entry in reversed(log_history):
-                          if "loss" in entry and "eval_loss" not in entry:
-                              metrics["train_loss"] = entry["loss"]
-                              break
-
-                  eval_results = {"metrics": metrics}
-                  with open("/tmp/eval_results.json", 'w') as f:
-                      json.dump(eval_results, f, indent=2)
-
-                  print(f"Extracted metrics: {json.dumps(metrics, indent=2)}")
+                  import json
+                  results = """{{inputs.parameters.eval_results}}"""
+                  with open("/tmp/eval_results.json", "w") as f:
+                      f.write(results)
+                  parsed = json.loads(results)
+                  print(f"Eval metrics: {json.dumps(parsed.get('metrics', {}), indent=2)}")
 
           # ── Failure Report Template ───────────────────────────────
           - name: failure-report
@@ -332,11 +306,16 @@ pipeline:
               args:
                 - |
                   import json, sys
+                  raw_metric = "{{inputs.parameters.final_metric}}"
+                  try:
+                      final_metric = float(raw_metric)
+                  except (ValueError, TypeError):
+                      final_metric = None
                   report = {
                     "status": "FAILED",
                     "reason": "Metric threshold not met after max iterations",
                     "metric_name": "{{inputs.parameters.metric_name}}",
-                    "final_metric": float("{{inputs.parameters.final_metric}}"),
+                    "final_metric": final_metric,
                     "iterations_run": int("{{inputs.parameters.iterations_run}}"),
                   }
                   print(json.dumps(report, indent=2))

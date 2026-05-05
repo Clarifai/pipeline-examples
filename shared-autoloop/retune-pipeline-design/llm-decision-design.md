@@ -491,7 +491,7 @@ The `strategy_metadata` output always indicates which path was taken:
 ```json
 {
   "method": "llm",
-  "model_url": "https://clarifai.com/openai/chat-completion/models/gpt-oss-120b",
+  "model_url": "https://clarifai.com/openai/chat-completion/models/gpt-4o-mini",
   "temperature": 0.1,
   "attempts": 1,
   "prompt_tokens": 2480,
@@ -641,8 +641,8 @@ Train → Eval → llm-decide → (deploy: export)
 
 | Model | URL Pattern | Strengths |
 |---|---|---|
-| GPT-4o-mini | `https://clarifai.com/openai/chat-completion/models/gpt-oss-120b` | Low cost (~$0.001/call), fast (2–4s), excellent JSON compliance |
-| GPT-4o | `https://clarifai.com/openai/chat-completion/models/gpt-oss-120b` | Higher reasoning quality, higher cost (~$0.01/call) |
+| GPT-4o-mini | `https://clarifai.com/openai/chat-completion/models/gpt-4o-mini` | Low cost (~$0.001/call), fast (2–4s), excellent JSON compliance |
+| GPT-4o | `https://clarifai.com/openai/chat-completion/models/gpt-4o` | Higher reasoning quality, higher cost (~$0.01/call) |
 | Claude 3.5 Sonnet | `https://clarifai.com/anthropic/completion/models/claude-3_5-sonnet` | Strong at structured analysis, 200K context |
 
 ### 9.2 Guidance
