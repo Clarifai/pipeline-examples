@@ -1,0 +1,23 @@
+model:
+  id: PLACEHOLDER_MODEL_ID
+  user_id: PLACEHOLDER_USER_ID
+  app_id: PLACEHOLDER_APP_ID
+  model_type_id: text-to-text
+
+build_info:
+  python_version: "3.12"
+
+inference_compute_info:
+  cpu_limit: "8"
+  cpu_memory: "32Gi"
+  num_accelerators: 1
+  accelerator_type:
+  - NVIDIA-*
+  accelerator_memory: "43Gi"
+
+checkpoints:
+  repo_id: Qwen/Qwen3-8B
+  type: huggingface
+  when: runtime
+
+num_threads: 32

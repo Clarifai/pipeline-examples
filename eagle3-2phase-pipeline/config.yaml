@@ -1,0 +1,85 @@
+pipeline:
+  id: "eagle3-2phase-pipeline"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  step_directories:
+    - eagle3-train-ps
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: eagle3-2phase-pipeline
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: sg_n
+              value: "24000"
+            - name: uc_n
+              value: "19000"
+            - name: pb_n
+              value: "11000"
+            - name: sg_target
+              value: "25000"
+            - name: uc_target
+              value: "25000"
+            - name: pb_target
+              value: "11000"
+            - name: batch_size
+              value: "4"
+            - name: max_length
+              value: "4096"
+            - name: sglang_mem_frac
+              value: "0.6"
+            - name: dataloader_num_workers
+              value: "8"
+            - name: phase1_epochs
+              value: "10"
+            - name: phase2_epochs
+              value: "6"
+            - name: learning_rate
+              value: "2e-5"
+            - name: regen_temperature
+              value: "0.8"
+            - name: model_id
+              value: "qwen3-8b-eagle3"
+        templates:
+        - name: sequence
+          steps:
+          - - name: eagle3-train-step
+              templateRef:
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/eagle3-train-ps
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/eagle3-train-ps
+              arguments:
+                parameters:
+                  - name: sg_n
+                    value: "{{workflow.parameters.sg_n}}"
+                  - name: uc_n
+                    value: "{{workflow.parameters.uc_n}}"
+                  - name: pb_n
+                    value: "{{workflow.parameters.pb_n}}"
+                  - name: sg_target
+                    value: "{{workflow.parameters.sg_target}}"
+                  - name: uc_target
+                    value: "{{workflow.parameters.uc_target}}"
+                  - name: pb_target
+                    value: "{{workflow.parameters.pb_target}}"
+                  - name: batch_size
+                    value: "{{workflow.parameters.batch_size}}"
+                  - name: max_length
+                    value: "{{workflow.parameters.max_length}}"
+                  - name: sglang_mem_frac
+                    value: "{{workflow.parameters.sglang_mem_frac}}"
+                  - name: dataloader_num_workers
+                    value: "{{workflow.parameters.dataloader_num_workers}}"
+                  - name: phase1_epochs
+                    value: "{{workflow.parameters.phase1_epochs}}"
+                  - name: phase2_epochs
+                    value: "{{workflow.parameters.phase2_epochs}}"
+                  - name: learning_rate
+                    value: "{{workflow.parameters.learning_rate}}"
+                  - name: regen_temperature
+                    value: "{{workflow.parameters.regen_temperature}}"
+                  - name: model_id
+                    value: "{{workflow.parameters.model_id}}"
