@@ -42,6 +42,8 @@ pipeline:
               value: "2e-5"
             - name: regen_temperature
               value: "0.8"
+            - name: app_id
+              value: "eagle3-pipeline"
             - name: model_id
               value: "qwen3-8b-eagle3"
         templates:
@@ -81,5 +83,7 @@ pipeline:
                     value: "{{workflow.parameters.learning_rate}}"
                   - name: regen_temperature
                     value: "{{workflow.parameters.regen_temperature}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
                   - name: model_id
                     value: "{{workflow.parameters.model_id}}"

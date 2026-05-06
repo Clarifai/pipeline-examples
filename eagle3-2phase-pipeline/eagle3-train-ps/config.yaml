@@ -57,6 +57,9 @@ pipeline_step_input_params:
   - name: regen_temperature
     default: "0.8"
     description: "Sampling temperature for regen (0 = greedy, >0 = sampled)"
+  - name: app_id
+    default: "eagle3-pipeline"
+    description: "Clarifai app ID for model upload"
   - name: model_id
     default: "qwen3-8b-eagle3"
     description: "Clarifai model ID for upload"

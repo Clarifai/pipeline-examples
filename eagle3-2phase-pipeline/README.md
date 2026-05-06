@@ -60,6 +60,7 @@ clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
     --set batch_size="2" --set max_length="1024" --set sglang_mem_frac="0.5" \
     --set phase1_epochs="1" --set phase2_epochs="3" --set learning_rate="5e-5" \
     --set regen_temperature="0" \
+    --set app_id="<YOUR_APP_ID>" \
     --set model_id="qwen3-8b-eagle3-test"
 ```
 
@@ -83,6 +84,7 @@ All parameters have defaults. Override only what you need.
 | `phase2_epochs` | 6 | Phase-2 finetune epochs |
 | `learning_rate` | 2e-5 | Phase-2 LR (phase-1 is hardcoded 1e-4) |
 | `regen_temperature` | 0.8 | Regen sampling temp (0 = greedy/deterministic) |
+| `app_id` | eagle3-pipeline | Clarifai app ID for model upload |
 | `model_id` | qwen3-8b-eagle3 | Clarifai model ID for upload |
 
 ## Local testing
@@ -119,6 +121,7 @@ docker exec eagle3-test bash -c \
     --batch_size 2 --max_length 1024 --sglang_mem_frac 0.5 \
     --phase1_epochs 1 --phase2_epochs 3 --learning_rate 5e-5 \
     --regen_temperature 0 \
+    --app_id <YOUR_APP_ID> \
     --model_id qwen3-8b-eagle3-test"
 
 # Full production training (several hours)

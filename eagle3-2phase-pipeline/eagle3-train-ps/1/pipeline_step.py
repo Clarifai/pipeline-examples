@@ -71,11 +71,13 @@ def main():
     parser.add_argument("--phase2_epochs",          default="6",     help="Number of epochs for phase-2 finetune")
     parser.add_argument("--learning_rate",          default="2e-5",  help="Learning rate for phase-2 (phase-1 LR is hardcoded at 1e-4)")
     parser.add_argument("--regen_temperature",      default="0.8",   help="Sampling temperature for phase-2 data regeneration; 0 = greedy (byte-identical regen across reruns), >0 = sampled (different bytes each run, regen has no seed)")
+    parser.add_argument("--app_id",                  default="eagle3-pipeline", help="Clarifai app id for the upload")
     parser.add_argument("--model_id",               default="qwen3-8b-eagle3", help="Clarifai model id for the upload")
     args = parser.parse_args()
 
     env = {
         **os.environ,
+        "CLARIFAI_APP_ID":        args.app_id,
         "SG_N":                   args.sg_n,
         "UC_N":                   args.uc_n,
         "PB_N":                   args.pb_n,
