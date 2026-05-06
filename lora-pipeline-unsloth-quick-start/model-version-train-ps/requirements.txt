@@ -8,7 +8,7 @@ datasets==3.6.0
 hf-transfer==0.1.9
 huggingface_hub==0.34.2
 peft==0.16.0
-transformers==4.54.0
+transformers==5.0.0rc3
 tokenizers==0.21.4
 trl==0.19.1
 unsloth==2025.7.8
