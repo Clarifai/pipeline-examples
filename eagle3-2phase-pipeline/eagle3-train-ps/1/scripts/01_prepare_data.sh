@@ -64,10 +64,11 @@ print(f"Wrote {len(mixed)} -> {out}")
 # Filepath-keyed caches (SpecForge processed_dataset, vocab_mapping, HF generator)
 # would silently reuse OLD data on the next training run. Invalidate them.
 import shutil
+hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 for p in [
     os.path.join("$ROOT_DIR", "cache", "processed_dataset"),
     os.path.join("$ROOT_DIR", "cache", "vocab_mapping"),
-    os.path.expanduser("~/.cache/huggingface/datasets/generator"),
+    os.path.join(hf_home, "datasets", "generator"),
 ]:
     if os.path.isdir(p):
         shutil.rmtree(p, ignore_errors=True)

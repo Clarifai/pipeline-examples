@@ -181,8 +181,8 @@ class OpenAI_APIServer:
       for line in proc.stdout:
         logger.info(f"SGLang: {line.strip()}")
 
-    t = threading.Thread(target=log_process_output, args=(_self.process,), daemon=True)
-    t.start()
+    _self.server_thread = threading.Thread(target=log_process_output, args=(_self.process,), daemon=True)
+    _self.server_thread.start()
 
     # Wait for server to be ready with timeout
     start_time = time.time()

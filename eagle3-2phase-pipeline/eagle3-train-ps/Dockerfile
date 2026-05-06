@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Clone SpecForge repo (scripts reference /workspace/SpecForge directly)
 # and install as editable + extra deps sglang:v0.5.9 doesn't ship.
 RUN git clone https://github.com/sgl-project/SpecForge.git /workspace/SpecForge && \
+    cd /workspace/SpecForge && git checkout d5fb617f735db85a680876327f8173de0cb57c15 && \
     pip install --no-cache-dir --no-deps -e /workspace/SpecForge && \
     pip install --no-cache-dir \
         accelerate qwen-vl-utils==0.0.11 tensorboard wandb yunchang

@@ -60,7 +60,8 @@ done
 # Invalidate stale caches keyed only on filepath (SpecForge's processed_dataset
 # + vocab_mapping, and HF datasets' generator cache). Without this, phase-2 would
 # silently reuse a previous combined dataset with different content.
-for p in "$ROOT_DIR/cache/processed_dataset" "$ROOT_DIR/cache/vocab_mapping" "$HOME/.cache/huggingface/datasets/generator"; do
+HF_DATASETS_ROOT="${HF_DATASETS_CACHE:-${HF_HOME:-$HOME/.cache/huggingface}/datasets}"
+for p in "$ROOT_DIR/cache/processed_dataset" "$ROOT_DIR/cache/vocab_mapping" "$HF_DATASETS_ROOT/generator"; do
     if [ -d "$p" ]; then
         rm -rf "$p"
         echo "invalidated cache: $p"

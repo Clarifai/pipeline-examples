@@ -23,10 +23,14 @@ DRAFT_DEST = os.path.join(RUNNER_DIR, "1", "eagle3_draft")
 
 
 def latest_phase2_ckpt():
-    ckpts = sorted(glob.glob(os.path.join(WORKSPACE, "outputs/phase2/epoch_*")))
+    ckpts = glob.glob(os.path.join(WORKSPACE, "outputs/phase2/epoch_*"))
     if not ckpts:
         raise SystemExit("no phase2 checkpoint in outputs/phase2/")
-    return ckpts[-1]
+    # Names are epoch_{N}_step_{M}; sort by step number to handle double digits
+    def step_num(p):
+        parts = Path(p).name.split("_step_")
+        return int(parts[-1]) if len(parts) == 2 else 0
+    return max(ckpts, key=step_num)
 
 
 def package_and_upload(env, model_id):
@@ -49,7 +53,7 @@ def package_and_upload(env, model_id):
 
     archive = shutil.make_archive(
         os.path.join(WORKSPACE, "outputs", f"{Path(ckpt).name}_eagle3_draft"),
-        "tar", root_dir=ckpt,
+        "gztar", root_dir=ckpt,
     )
     print(f"\n>>> upload_checkpoint_to_artifact {archive}", flush=True)
     upload_checkpoint_to_artifact(archive, user_id, app_id, model_id)
