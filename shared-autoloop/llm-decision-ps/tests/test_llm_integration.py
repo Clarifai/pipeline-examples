@@ -43,10 +43,10 @@ build_decision_prompt = prompts_mod.build_decision_prompt
 LLM_MODEL_URL = "https://clarifai.com/openai/chat-completion/models/gpt-4o"
 LLM_TEMPERATURE = 0.1
 
-# Skip all tests if no PAT is set
+# Skip unless explicitly opted in
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("CLARIFAI_PAT"),
-    reason="CLARIFAI_PAT not set — skipping live LLM integration tests",
+    not os.environ.get("RUN_LIVE_LLM_TESTS"),
+    reason="Set RUN_LIVE_LLM_TESTS=1 (and CLARIFAI_PAT) to run live LLM integration tests",
 )
 
 

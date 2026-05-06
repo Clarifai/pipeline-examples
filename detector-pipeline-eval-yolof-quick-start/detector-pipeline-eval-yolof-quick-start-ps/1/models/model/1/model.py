@@ -127,24 +127,40 @@ class YOLOFEvaluator:
 
             # Download latest checkpoint from artifact store
             logging.info(f"Downloading checkpoint from artifact: {artifact_id}")
-            versions = ArtifactVersion().list(
+            versions = list(ArtifactVersion().list(
                 artifact_id=artifact_id, user_id=user_id, app_id=app_id
-            )
+            ))
             if not versions:
                 raise ValueError(f"No checkpoint versions found in artifact '{artifact_id}'")
-            # Get the two most recent versions (checkpoint + config)
+            # Sort newest first
             sorted_versions = sorted(versions, key=lambda v: v.created_at, reverse=True)
 
+            # Identify versions by their original filename
+            checkpoint_version = None
+            config_version = None
+            for v in sorted_versions:
+                name = getattr(v.upload, "content_name", "") if hasattr(v, "upload") else ""
+                if name.endswith(".pth") and checkpoint_version is None:
+                    checkpoint_version = v
+                elif name.endswith(".py") and config_version is None:
+                    config_version = v
+                if checkpoint_version and config_version:
+                    break
+
+            # Fallback: if no .pth found by name, use the most recent version
+            if checkpoint_version is None:
+                checkpoint_version = sorted_versions[0]
+
             # Download checkpoint (.pth file)
-            checkpoint_root = sorted_versions[0].download(
+            checkpoint_root = checkpoint_version.download(
                 output_path=os.path.join(checkpoint_dir, "checkpoint.pth"),
                 force=True,
             )
             logging.info(f"Downloaded checkpoint to {checkpoint_root}")
 
-            # Download config if available (second most recent upload)
-            if len(sorted_versions) >= 2:
-                config_path = sorted_versions[1].download(
+            # Download config if available
+            if config_version is not None:
+                config_path = config_version.download(
                     output_path=os.path.join(checkpoint_dir, "config.py"),
                     force=True,
                 )
