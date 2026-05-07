@@ -1,0 +1,57 @@
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  step_directories:
+    - quantize-step
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: <YOUR_PIPELINE_ID>
+      spec:
+        entrypoint: sequence
+        arguments:
+          parameters:
+            - name: src
+              value: "Qwen/Qwen2.5-0.5B-Instruct"
+            - name: scheme
+              value: "W4A16"
+            - name: pipeline
+              value: "datafree"
+            - name: num_gpus
+              value: "1"
+            - name: out
+              value: "/workspace/outputs/quantized_model"
+            - name: user_id
+              value: ""
+            - name: app_id
+              value: ""
+            - name: artifact_id
+              value: "quantized-checkpoint"
+        templates:
+        - name: sequence
+          steps:
+          - - name: quantize-step-name
+              templateRef:
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/quantize-step
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/quantize-step
+              arguments:
+                parameters:
+                  - name: src
+                    value: "{{workflow.parameters.src}}"
+                  - name: scheme
+                    value: "{{workflow.parameters.scheme}}"
+                  - name: pipeline
+                    value: "{{workflow.parameters.pipeline}}"
+                  - name: num_gpus
+                    value: "{{workflow.parameters.num_gpus}}"
+                  - name: out
+                    value: "{{workflow.parameters.out}}"
+                  - name: user_id
+                    value: "{{workflow.parameters.user_id}}"
+                  - name: app_id
+                    value: "{{workflow.parameters.app_id}}"
+                  - name: artifact_id
+                    value: "{{workflow.parameters.artifact_id}}"
