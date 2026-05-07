@@ -54,11 +54,22 @@ def upload_artifact(out: str, artifact_id: str, user_id: str, app_id: str) -> No
     """Zip the quantized checkpoint dir and upload as a Clarifai artifact version."""
     from clarifai.client.artifact import Artifact
     from clarifai.client.artifact_version import ArtifactVersion
+    from clarifai.client.user import User
 
     archive_base = str(Path(out).parent / Path(out).name)
     archive = shutil.make_archive(archive_base, "zip", root_dir=out)
     print(f"\n>>> upload: {archive} -> user={user_id} app={app_id} artifact_id={artifact_id}",
           flush=True)
+
+    user = User(user_id=user_id)
+    try:
+        user.app(app_id=app_id)
+    except Exception as e:
+        if "does not exist" in str(e).lower():
+            print(f">>> app '{app_id}' not found, creating it", flush=True)
+            user.create_app(app_id=app_id)
+        else:
+            raise
 
     existing = list(Artifact().list(user_id=user_id, app_id=app_id))
     if not any(a.id == artifact_id for a in existing):
