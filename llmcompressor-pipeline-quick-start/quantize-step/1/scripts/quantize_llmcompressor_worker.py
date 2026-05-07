@@ -36,8 +36,11 @@ def _add_default_ignore_patterns(ignore: list[str], cfg: dict) -> list[str]:
         if p not in out:
             out.append(p)
 
-    # Universally needed
+    # Universally needed. The `lm_head` exact pattern catches the top-level
+    # module; `re:.*lm_head$` also catches nested forms like
+    # `language_model.lm_head` (common in VLMs / audio multimodals).
     add("lm_head")
+    add("re:.*lm_head$")
 
     # MoE indicators
     is_moe = any(
@@ -57,21 +60,73 @@ def _add_default_ignore_patterns(ignore: list[str], cfg: dict) -> list[str]:
         add("re:.*mlp.gate$")
         add("re:.*mlp.router$")
         add("re:.*router$")
-        # Some archs (DeepSeek-V3) have a mixer/conv attribute that should
-        # stay in BF16; the `re:.*linear_attn.*` pattern covers Qwen3.5/3-Next
-        # hybrid linear-attention layers.
-        add("re:.*linear_attn.*")
         # Shared-expert gates (Qwen3.5 etc.) are scalar gating coefficients.
         add("re:.*shared_expert_gate$")
 
-    # VLM indicators — keep vision tower in BF16
-    if any(k in cfg for k in ("vision_config", "vision_tower_config")) or any(
-        k in cfg for k in ("image_token_id", "video_token_id")
+    # Built-in MTP / multi-token-prediction heads used for in-model
+    # speculative decoding (Qwen3-Next, Qwen3.5, Qwen3.6, DeepSeek-V3 MTP).
+    # Quantizing these tiny modules to W4A4 risks tanking the speculative
+    # accept-rate while giving negligible compression savings. Detect via
+    # `mtp_num_hidden_layers` (or nested under text_config for VLMs).
+    text_cfg = cfg.get("text_config") or {}
+    if any(
+        isinstance(src.get("mtp_num_hidden_layers"), int)
+        and src.get("mtp_num_hidden_layers") > 0
+        for src in (cfg, text_cfg)
     ):
+        add("re:^mtp\\..*")
+        add("re:.*\\.mtp\\..*")
+
+    # Hybrid attention paths — small but precision-sensitive sub-modules that
+    # don't benefit from W4A4 and tend to drift quality when quantized. Apply
+    # to BOTH MoE and dense models; Qwen3.5 / Qwen3.6 / Qwen3-Next include
+    # `linear_attn` paths even in their dense variants.
+    add("re:.*linear_attn.*")
+    add("re:.*mamba.*")
+    add("re:.*ssm.*")
+    # Mamba/SSM 1-D conv (Falcon-Mamba, Mamba-2, Jamba, NemotronH). The
+    # convs are nn.Conv1d (not nn.Linear) so `targets="Linear"` already
+    # excludes them, but be defensive — some recipes broaden targets and
+    # we don't want a Conv1d weight ever quantized.
+    # Note: do NOT exclude the whole `*.mixer.*` subtree — Mamba's
+    # in_proj/out_proj/x_proj/dt_proj are nn.Linear and CAN be NVFP4'd.
+    add("re:.*\\.conv1d\\..*")
+    add("re:.*\\.conv1d$")
+
+    # VLM indicators — keep vision tower in BF16. Patterns intentionally use
+    # a leading `.*` because module paths are typically `model.<sub>.…` — a
+    # bare `re:visual.*` does NOT match `model.visual.blocks.0.…` (it would
+    # only match names *starting* with `visual`).
+    is_vlm = any(k in cfg for k in ("vision_config", "vision_tower_config")) or any(
+        k in cfg for k in ("image_token_id", "video_token_id")
+    )
+    # Audio multimodal indicators (Qwen2-Audio, Whisper-style stacks, Phi-4
+    # multimodal etc.). Detection mirrors the VLM check on audio-side keys.
+    is_audio_mm = any(k in cfg for k in ("audio_config", "audio_tower_config")) or any(
+        k in cfg for k in ("audio_token_id", "audio_token_index")
+    )
+    if is_vlm or is_audio_mm:
+        # Vision side
         add("re:.*vision_tower.*")
-        add("re:visual.*")
+        add("re:.*\\.visual\\..*")        # `model.visual.…` (Qwen3.5/3.6 VLM)
+        add("re:.*\\.visual$")            # the visual submodule attribute itself
         add("re:.*vision_model.*")
+        add("re:.*vision_encoder.*")
+        add("re:.*visual_encoder.*")
+        add("re:.*visual_tower.*")
         add("re:.*embed_vision.*")
+        add("re:.*image_processor.*")
+        add("re:.*image_proj.*")
+        add("re:.*image_embedding.*")
+        add("re:.*patch_embed.*")
+        add("re:.*mm_projector.*")        # LLaVA-style multimodal projector
+        add("re:.*multi_modal_projector.*")
+        # Audio side
+        add("re:.*audio_tower.*")          # Qwen2-Audio path: `audio_tower.…`
+        add("re:.*audio_encoder.*")
+        add("re:.*audio_model.*")
+        add("re:.*audio_proj.*")
+        add("re:.*audio_embed.*")
 
     # Embeddings should always stay in BF16 — they aren't `Linear` so most
     # recipes won't touch them, but exact-name pattern catches any custom
@@ -79,6 +134,149 @@ def _add_default_ignore_patterns(ignore: list[str], cfg: dict) -> list[str]:
     add("re:.*embed_tokens$")
 
     return out
+
+
+def _restore_mtp_weights(out_dir: Path, src_dir: str) -> None:
+    """Some loader classes (Qwen3_5ForConditionalGeneration, Qwen3NextForCausalLM,
+    DeepSeek-V3 multimodal variants) set `_keys_to_ignore_on_load_unexpected`
+    to drop top-level `mtp.*` weights during from_pretrained — MTP is loaded
+    later by the inference engine, not the HF model class. The downside is
+    that `save_pretrained` then writes a checkpoint with no MTP, and vLLM /
+    SGLang spec decoding (`--speculative-config qwen3_next_mtp`) breaks.
+
+    This copies MTP tensors from the source snapshot into the output as a
+    new BF16 shard and rebuilds `model.safetensors.index.json`. No-op when
+    the source has no MTP or when MTP already survived the round-trip.
+    """
+    import json
+    import shutil
+    from collections import defaultdict
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+
+    src_p = Path(src_dir)
+
+    src_index = src_p / "model.safetensors.index.json"
+    if src_index.exists():
+        src_weight_map = json.loads(src_index.read_text())["weight_map"]
+    elif (src_p / "model.safetensors").exists():
+        with safe_open(src_p / "model.safetensors", framework="pt") as f:
+            src_weight_map = {k: "model.safetensors" for k in f.keys()}
+    else:
+        return
+
+    mtp_keys = sorted(k for k in src_weight_map if k.startswith("mtp.") or ".mtp." in k)
+    if not mtp_keys:
+        return
+
+    out_index = out_dir / "model.safetensors.index.json"
+    out_single = out_dir / "model.safetensors"
+    if out_index.exists():
+        existing_weight_map = dict(json.loads(out_index.read_text())["weight_map"])
+        existing_files = sorted(set(existing_weight_map.values()))
+    elif out_single.exists():
+        with safe_open(out_single, framework="pt") as f:
+            existing_weight_map = {k: "model.safetensors" for k in f.keys()}
+        existing_files = ["model.safetensors"]
+    else:
+        shards = sorted(out_dir.glob("model-*-of-*.safetensors"))
+        if not shards:
+            return
+        existing_weight_map = {}
+        for sh in shards:
+            with safe_open(sh, framework="pt") as f:
+                for k in f.keys():
+                    existing_weight_map[k] = sh.name
+        existing_files = [sh.name for sh in shards]
+
+    if any(k.startswith("mtp.") or ".mtp." in k for k in existing_weight_map):
+        print("[mtp-restore] MTP weights already present in output — no patch needed.")
+        return
+
+    print(f"[mtp-restore] Source has {len(mtp_keys)} MTP tensors that the loader class "
+          f"dropped on save; restoring as a BF16 shard alongside quantized weights.")
+
+    shard_to_keys = defaultdict(list)
+    for k in mtp_keys:
+        shard_to_keys[src_weight_map[k]].append(k)
+    mtp_tensors = {}
+    mtp_bytes = 0
+    for sh, keys in shard_to_keys.items():
+        with safe_open(src_p / sh, framework="pt") as f:
+            for k in keys:
+                t = f.get_tensor(k)
+                mtp_tensors[k] = t
+                mtp_bytes += t.element_size() * t.numel()
+
+    dtype_bytes = {
+        "BF16": 2, "F16": 2, "F32": 4, "F64": 8,
+        "F8_E4M3": 1, "F8_E5M2": 1,
+        "U8": 1, "I8": 1, "I32": 4, "I64": 8, "BOOL": 1,
+    }
+    existing_bytes = 0
+    for fname in existing_files:
+        with safe_open(out_dir / fname, framework="pt") as f:
+            for k in f.keys():
+                sl = f.get_slice(k)
+                shape = sl.get_shape()
+                sz = dtype_bytes.get(sl.get_dtype().upper(), 4)
+                n = 1
+                for d in shape:
+                    n *= d
+                existing_bytes += n * sz
+
+    new_total = len(existing_files) + 1
+    rename_map = {}
+    for i, old in enumerate(existing_files, start=1):
+        rename_map[old] = f"model-{i:05d}-of-{new_total:05d}.safetensors"
+    for old, new in rename_map.items():
+        if old != new:
+            shutil.move(str(out_dir / old), str(out_dir / new))
+
+    new_weight_map = {k: rename_map[v] for k, v in existing_weight_map.items()}
+    mtp_name = f"model-{new_total:05d}-of-{new_total:05d}.safetensors"
+    save_file(mtp_tensors, str(out_dir / mtp_name), metadata={"format": "pt"})
+    for k in mtp_tensors:
+        new_weight_map[k] = mtp_name
+
+    total_size = existing_bytes + mtp_bytes
+    out_index.write_text(json.dumps(
+        {"metadata": {"total_size": total_size}, "weight_map": new_weight_map},
+        indent=2,
+    ))
+    print(f"[mtp-restore] Wrote {new_total}-shard layout, "
+          f"{len(existing_weight_map)} quantized + {len(mtp_keys)} MTP keys, "
+          f"total_size={total_size / 1024 ** 3:.2f} GiB")
+
+    # Patch quantization_config.ignore in config.json. The recipe-time `re:^mtp\..*`
+    # regex never matched anything because the Qwen3_5/Qwen3_6/Next loader class
+    # discarded MTP on load — so the saved `ignore` list (the *expanded* form
+    # llmcompressor walks from the live model) has zero MTP entries. Without
+    # this, vLLM's compressed-tensors loader wraps every MTP Linear with NVFP4
+    # weight_packed / weight_scale parameters and fails to load the BF16 MTP
+    # weights we just restored — silently leaving MTP at random init, killing
+    # spec-decoding accept rate.
+    cfg_path = out_dir / "config.json"
+    if cfg_path.exists():
+        cfg = json.loads(cfg_path.read_text())
+        qc = cfg.get("quantization_config")
+        if qc and isinstance(qc.get("ignore"), list):
+            mtp_linear_modules = set()
+            for k in mtp_tensors:
+                if not k.endswith(".weight"):
+                    continue
+                if mtp_tensors[k].dim() == 2:
+                    mtp_linear_modules.add(k[: -len(".weight")])
+            added = 0
+            for m in sorted(mtp_linear_modules):
+                if m not in qc["ignore"]:
+                    qc["ignore"].append(m)
+                    added += 1
+            if added:
+                cfg_path.write_text(json.dumps(cfg, indent=2))
+                print(f"[mtp-restore] Patched quantization_config.ignore "
+                      f"with {added} MTP Linear module names "
+                      f"(prevents vLLM from wrapping them as NVFP4).")
 
 
 def _detect_arch(cfg: dict) -> dict:
@@ -210,19 +408,45 @@ def main() -> int:
     # Load model + tokenizer/processor (now the heavy imports happen)
     # ------------------------------------------------------------------
     import torch  # noqa: F401 (used implicitly by HF / llmcompressor)
+    import transformers
     from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
 
     print(f"[load] model from {src}  dtype={args.dtype}")
     trust = not args.no_trust_remote_code
     model_kwargs = {"dtype": args.dtype, "trust_remote_code": trust}
 
-    # VLMs typically need AutoProcessor; pure-text LLMs use AutoTokenizer.
-    # For multimodal architectures the right `from_pretrained` class is the
-    # explicit `Foo4ForConditionalGeneration` — but `AutoModelForCausalLM`
-    # works for the language-only variants and most VLMs that ship a
-    # text-CausalLM config. If the user hits a model where this fails, they
-    # can pre-load the model and pass it via the Python API.
-    model = AutoModelForCausalLM.from_pretrained(src, **model_kwargs)
+    # Loader strategy:
+    #   * For VLMs: load via the explicit class declared in config.json
+    #     `architectures` field (e.g. Qwen3_5ForConditionalGeneration). This
+    #     preserves the full multimodal structure — vision tower, vision_config,
+    #     embed_vision, etc. — in both the live model and the saved
+    #     state_dict/config.json. Required so vLLM's multimodal dispatchers
+    #     can load the resulting checkpoint (vLLM's qwen3_5 / gemma4 / llama4
+    #     model registries route through the multimodal pipeline and expect a
+    #     full Foo*Config with vision_config; AutoModelForCausalLM-saved
+    #     checkpoints fail there with "Invalid type of HuggingFace config").
+    #   * For non-VLM models: AutoModelForCausalLM is the right loader.
+    #
+    # Vision-tower Linears stay BF16 in either case via the auto-defaults
+    # ignore list (`re:.*vision_tower.*`, `re:visual.*`, etc.). What changes
+    # is whether the vision components survive in the saved checkpoint at all.
+    loader_class = None
+    if arch.get("is_vlm") and arch.get("architectures"):
+        arch_name = arch["architectures"][0]
+        loader_class = getattr(transformers, arch_name, None)
+        if loader_class is not None:
+            print(f"[load] VLM detected; using {arch_name}.from_pretrained "
+                  "(preserves vision_config in saved checkpoint)")
+        else:
+            print(f"[load] VLM detected but {arch_name!r} not in transformers "
+                  "namespace; falling back to AutoModelForCausalLM "
+                  "(saved checkpoint will be text-only)")
+
+    if loader_class is not None:
+        model = loader_class.from_pretrained(src, **model_kwargs)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(src, **model_kwargs)
+
     try:
         processor = AutoProcessor.from_pretrained(src, trust_remote_code=trust)
         tokenizer = getattr(processor, "tokenizer", None)
@@ -308,6 +532,8 @@ def main() -> int:
         processor.save_pretrained(str(out))
     else:
         tokenizer.save_pretrained(str(out))
+
+    _restore_mtp_weights(out, src)
 
     print(f"[done] checkpoint at: {out}")
     return 0
