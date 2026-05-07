@@ -11,7 +11,7 @@ pipeline_step_compute_info:
   cpu_limit: "8"
   cpu_memory: "64Gi"
   num_accelerators: 1
-  accelerator_memory: "80Gi"
+  accelerator_memory: "90Gi"
   accelerator_type: ["NVIDIA-*"]
 
 pipeline_step_input_params:

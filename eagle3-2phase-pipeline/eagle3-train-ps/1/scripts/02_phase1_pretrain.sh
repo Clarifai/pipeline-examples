@@ -24,6 +24,8 @@ MAX_LENGTH=${MAX_LENGTH:-4096}
 BATCH_SIZE=${BATCH_SIZE:-4}
 SGLANG_MEM_FRAC=${SGLANG_MEM_FRAC:-0.6}
 DATALOADER_NUM_WORKERS=${DATALOADER_NUM_WORKERS:-8}
+SAVE_INTERVAL=${SAVE_INTERVAL:-2000}
+EVAL_INTERVAL=${EVAL_INTERVAL:-2000}
 
 LOG="$ROOT_DIR/logs/02_phase1_$(date +%Y%m%d_%H%M%S).log"
 mkdir -p "$(dirname "$LOG")"
@@ -71,8 +73,8 @@ torchrun \
     --target-model-backend sglang \
     --sglang-mem-fraction-static $SGLANG_MEM_FRAC \
     --log-interval 10 \
-    --save-interval 2000 \
-    --eval-interval 2000 \
+    --save-interval $SAVE_INTERVAL \
+    --eval-interval $EVAL_INTERVAL \
     --dist-timeout 60 \
     --report-to tensorboard
 

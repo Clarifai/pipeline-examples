@@ -33,6 +33,22 @@ def latest_phase2_ckpt():
     return max(ckpts, key=step_num)
 
 
+def cleanup_checkpoints(phase_dir):
+    """Keep only the latest checkpoint, delete the rest to save disk."""
+    ckpts = glob.glob(os.path.join(phase_dir, "epoch_*"))
+    if len(ckpts) <= 1:
+        return
+    def step_num(p):
+        parts = Path(p).name.split("_step_")
+        return int(parts[-1]) if len(parts) == 2 else 0
+    latest = max(ckpts, key=step_num)
+    for ckpt in ckpts:
+        if ckpt != latest:
+            shutil.rmtree(ckpt)
+            print(f"cleaned up checkpoint: {ckpt}", flush=True)
+    print(f"kept latest: {latest}", flush=True)
+
+
 def package_and_upload(env, model_id):
     user_id = env.get("CLARIFAI_USER_ID")
     app_id = env.get("CLARIFAI_APP_ID")
@@ -97,11 +113,13 @@ def main():
 
     subprocess.run(["bash", "scripts/01_prepare_data.sh"], cwd=WORKSPACE, env=env, check=True)
     subprocess.run(["bash", "scripts/02_phase1_pretrain.sh"], cwd=WORKSPACE, env=env, check=True)
+    cleanup_checkpoints(os.path.join(WORKSPACE, "outputs/phase1"))
     subprocess.run(["bash", "scripts/03_regenerate_data.sh", "sharegpt",     args.sg_target], cwd=WORKSPACE, env=env, check=True)
     subprocess.run(["bash", "scripts/03_regenerate_data.sh", "ultrachat",    args.uc_target], cwd=WORKSPACE, env=env, check=True)
     subprocess.run(["bash", "scripts/03_regenerate_data.sh", "perfectblend", args.pb_target], cwd=WORKSPACE, env=env, check=True)
     subprocess.run(["bash", "scripts/04_combine_regen.sh"], cwd=WORKSPACE, env=env, check=True)
     subprocess.run(["bash", "scripts/05_phase2_finetune.sh"], cwd=WORKSPACE, env=env, check=True)
+    cleanup_checkpoints(os.path.join(WORKSPACE, "outputs/phase2"))
 
     package_and_upload(env, args.model_id)
     print("\n=== pipeline_step.py done ===", flush=True)

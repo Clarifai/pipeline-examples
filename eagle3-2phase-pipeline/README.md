@@ -51,7 +51,8 @@ clarifai pipeline upload .
 
 ```bash
 # Full production training (all defaults, several hours)
-clarifai pipeline run --config config-lock.yaml --instance <gpu-instance>
+clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
+    --set app_id="<YOUR_APP_ID>"
 
 # Quick sanity check (~40 min)
 clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
@@ -86,6 +87,8 @@ All parameters have defaults. Override only what you need.
 | `regen_temperature` | 0.8 | Regen sampling temp (0 = greedy/deterministic) |
 | `app_id` | eagle3-pipeline | Clarifai app ID for model upload |
 | `model_id` | qwen3-8b-eagle3 | Clarifai model ID for upload |
+
+**Tip:** For better draft head quality, increase `phase1_epochs` (up to 10) and `phase2_epochs` (up to 6). More epochs improve token prediction accuracy at the cost of longer training time. The defaults are tuned for a reasonable balance of quality and speed.
 
 ## Local testing
 
@@ -126,7 +129,8 @@ docker exec eagle3-test bash -c \
 
 # Full production training (several hours)
 docker exec eagle3-test bash -c \
-    "cd /home/nonroot/main && python3 1/pipeline_step.py"
+    "cd /home/nonroot/main && python3 1/pipeline_step.py \
+    --app_id <YOUR_APP_ID>"
 
 # Cleanup
 docker rm -f eagle3-test
