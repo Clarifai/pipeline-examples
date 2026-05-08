@@ -2,7 +2,7 @@
 
 Usage:
     export CLARIFAI_PAT=<your-pat>
-    python test_clarifai_llm.py
+    python scripts/check_clarifai_llm.py
 """
 
 from clarifai.client.user import User
