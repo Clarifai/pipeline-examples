@@ -108,8 +108,8 @@ pipeline:
                 # ── STEP 1: Train (LoRA fine-tune) ──
                 - name: train
                   templateRef:
-                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps/versions/<TRAIN_PS_VERSION>
-                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/model-version-train-ps/versions/<TRAIN_PS_VERSION>
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/train-ps/versions/<TRAIN_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/train-ps/versions/<TRAIN_PS_VERSION>
                   arguments:
                     parameters:
                       - name: user_id
