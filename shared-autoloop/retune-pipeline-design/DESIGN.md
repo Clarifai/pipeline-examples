@@ -20,7 +20,7 @@ The pipeline is implemented as an Argo Workflow with **conditional branching** u
 - **Approach A** — DAG with recursive WorkflowTemplate (recommended for production)
 - **Approach B** — Unrolled multi-step sequential (fallback for simpler environments)
 
-Both approaches reuse the existing `detector-pipeline-yolof` training step and `detector-pipeline-eval-yolof-quick-start` evaluation step, adding two new lightweight CPU-only steps:
+Each autoloop pipeline is **self-contained** — it includes its own copy of the training step (`train-ps/`) with autoloop-specific modifications (`hyperparams_json`, `skip_export`), while external training pipelines remain unmodified. Two new lightweight CPU-only steps are shared across all autoloop pipelines (via symlinks to `shared-autoloop/`):
 - **metric-decision** step for threshold comparison and routing decisions ([design doc](metric-decision-design.md))
 - **hp-adjust** step for hyperparameter adjustment on retrain ([design doc](hp-adjustment-design.md))
 
@@ -69,8 +69,8 @@ An autonomous loop eliminates this gap by closing the feedback loop within a sin
 
 | Step | Reuse/New | Compute | Purpose |
 |------|-----------|---------|---------|
-| **yolof-train** | Reuse `detector-pipeline-yolof-ps` (modified) | 4 CPU, 16Gi RAM, 1× GPU 16Gi | Train YOLOF model, output checkpoint |
-| **yolof-eval** | Reuse `detector-pipeline-eval-yolof-quick-start-ps` (modified) | 4 CPU, 16Gi RAM, 1× GPU 16Gi | Run COCO evaluation, output metrics JSON |
+| **yolof-train** | Self-contained `train-ps/` (copied from `detector-pipeline-yolof-ps`, with autoloop params added) | 4 CPU, 16Gi RAM, 1× GPU 16Gi | Train YOLOF model, output checkpoint |
+| **yolof-eval** | Reuse `detector-pipeline-eval-yolof-quick-start-ps` | 4 CPU, 16Gi RAM, 1× GPU 16Gi | Run COCO evaluation, output metrics JSON |
 | **metric-decision** | **New** ([design](metric-decision-design.md)) | 1 CPU, 2Gi RAM, **no GPU** | Compare metrics against threshold, output routing decision (deploy/retrain/stop) |
 | **hp-adjust** | **New** ([design](hp-adjustment-design.md)) | 1 CPU, 2Gi RAM, **no GPU** | Generate adjusted hyperparameters for next training iteration (only runs on retrain) |
 | **model-export** | Reuse export logic from train step | 2 CPU, 4Gi RAM, no GPU | Upload passing model to Clarifai platform |
@@ -180,8 +180,8 @@ spec:
           # ── STEP 1: Train ──
           - name: train
             templateRef:
-              name: <yolof-train-ps-ref>
-              template: <yolof-train-ps-template>
+              name: <train-ps-ref>
+              template: <train-ps-template>
             arguments:
               parameters:
                 - name: user_id
@@ -221,8 +221,8 @@ spec:
           - name: eval
             depends: "train.Succeeded"
             templateRef:
-              name: <yolof-eval-ps-ref>
-              template: <yolof-eval-ps-template>
+              name: <eval-ps-ref>
+              template: <eval-ps-template>
             arguments:
               parameters:
                 - name: user_id
@@ -403,8 +403,8 @@ spec:
         # ══════════ Iteration 1 ══════════
         - - name: train-1
             templateRef:
-              name: <yolof-train-ps-ref>
-              template: <yolof-train-ps-template>
+              name: <train-ps-ref>
+              template: <train-ps-template>
             arguments:
               parameters:
                 - name: per_item_lrate
@@ -417,8 +417,8 @@ spec:
 
         - - name: eval-1
             templateRef:
-              name: <yolof-eval-ps-ref>
-              template: <yolof-eval-ps-template>
+              name: <eval-ps-ref>
+              template: <eval-ps-template>
             arguments:
               parameters:
                 - name: checkpoint_source
@@ -497,8 +497,8 @@ spec:
         - - name: train-2
             when: "{{steps.decide-1.outputs.parameters.decision}} == retrain"
             templateRef:
-              name: <yolof-train-ps-ref>
-              template: <yolof-train-ps-template>
+              name: <train-ps-ref>
+              template: <train-ps-template>
             arguments:
               parameters:
                 - name: hyperparams_json
@@ -508,8 +508,8 @@ spec:
         - - name: eval-2
             when: "{{steps.decide-1.outputs.parameters.decision}} == retrain"
             templateRef:
-              name: <yolof-eval-ps-ref>
-              template: <yolof-eval-ps-template>
+              name: <eval-ps-ref>
+              template: <eval-ps-template>
             arguments:
               parameters:
                 - name: checkpoint_path
@@ -563,8 +563,8 @@ spec:
         - - name: train-3
             when: "{{steps.decide-2.outputs.parameters.decision}} == retrain"
             templateRef:
-              name: <yolof-train-ps-ref>
-              template: <yolof-train-ps-template>
+              name: <train-ps-ref>
+              template: <train-ps-template>
             arguments:
               parameters:
                 - name: hyperparams_json
@@ -574,8 +574,8 @@ spec:
         - - name: eval-3
             when: "{{steps.decide-2.outputs.parameters.decision}} == retrain"
             templateRef:
-              name: <yolof-eval-ps-ref>
-              template: <yolof-eval-ps-template>
+              name: <eval-ps-ref>
+              template: <eval-ps-template>
             arguments:
               parameters:
                 - name: checkpoint_path
@@ -657,65 +657,40 @@ Key responsibilities:
 - Apply overfitting corrections when `is_overfitting=true` (reduce capacity, increase regularization)
 - Output new hyperparameter JSON for the next training iteration
 
-### 6.3 Modifications to Existing Training Step
+### 6.3 Training Step (Self-Contained in Each Autoloop)
 
-**File**: `detector-pipeline-yolof-ps/1/models/model/1/model.py`
-**Class**: `MMDetectionYoloF`
-**Method**: `train()`
+Each autoloop pipeline contains its own `train-ps/` directory, copied from the original external training pipeline with autoloop-specific modifications added. **External training pipelines are not modified.**
 
-**Change**: After training completes and before export, write a JSON file with checkpoint metadata:
+**File** (per autoloop): `<autoloop-folder>/train-ps/1/models/model/1/model.py`
 
-```python
-# After STEP 5 (Training), before STEP 6 (Benchmark):
-train_output = {
-    "checkpoint_path": self.weights_path,     # e.g., /tmp/mmdetection_work_dir/epoch_100.pth
-    "config_path": self.config_py_path,       # e.g., /tmp/mmdetection_work_dir/configured_config.py
-    "num_epochs": self.num_epochs,
-    "final_lr": self.learning_rate,
-}
-with open("/tmp/train_output.json", "w") as f:
-    json.dump(train_output, f)
+**Autoloop-specific additions** (not present in external pipelines):
+1. `skip_export: bool = False` and `hyperparams_json: str = "{}"` parameters on `train()`
+2. HP override block that parses `hyperparams_json` and applies per-parameter overrides
+3. Conditional export logic: when `skip_export=True`, uploads checkpoint to artifact store and extracts eval metrics as Argo output parameters instead of doing a full model export
 
-# Write individual files for Argo parameter extraction
-with open("/tmp/checkpoint_path", "w") as f:
-    f.write(self.weights_path)
-with open("/tmp/config_path", "w") as f:
-    f.write(self.config_py_path)
-```
+These modifications enable the autoloop to:
+- Pass tuned hyperparameters from the decision step to the training step
+- Extract eval metrics for the decision step without deploying the model
+- Skip model export during intermediate iterations
 
-**Impact**: Additive-only change. Existing single-shot training pipelines are unaffected (the extra files are simply ignored if not consumed).
+### 6.4 Evaluation Step
 
-### 6.4 Modifications to Existing Evaluation Step
-
-**File**: `detector-pipeline-eval-yolof-quick-start-ps/1/models/model/1/model.py`
-**Class**: `YOLOFEvaluator`
-**Method**: `evaluate()`
-
-**Change**: Add two new parameters and a conditional checkpoint loading path:
+The evaluation step (`detector-pipeline-eval-yolof-quick-start-ps`) is referenced via Argo `templateRef` from the autoloop config. It accepts a `checkpoint_source` parameter to support loading checkpoints from either the artifact store or a filesystem path:
 
 ```python
 def evaluate(
     self,
     # ... existing params ...
-    checkpoint_source: str = "artifact",  # NEW: "artifact" or "path"
-    checkpoint_path: str = "",            # NEW: path to .pth when source="path"
+    checkpoint_source: str = "artifact",  # "artifact" or "model_artifact"
+    checkpoint_path: str = "",            # path/artifact_id when source="model_artifact"
 ) -> str:
-    # STEP 1: Download checkpoint (modified)
-    if checkpoint_source == "path" and checkpoint_path:
-        checkpoint_root = checkpoint_path
-        logging.info(f"Using checkpoint from train step: {checkpoint_root}")
+    # STEP 1: Download checkpoint
+    if checkpoint_source == "model_artifact":
+        # Load from artifact store (used in autoloop)
+        ...
     else:
         # Existing artifact download logic (unchanged)
-        artifact_info = pretrained_weights_artifacts.get(pretrained_weights)
-        checkpoint_root = version.download(...)
-```
-
-Also add Argo output parameter writing after computing metrics:
-
-```python
-# After STEP 7 (save results), add:
-with open("/tmp/eval_results", "w") as f:
-    f.write(results_path)
+        ...
 ```
 
 **Impact**: Backward-compatible. Default `checkpoint_source="artifact"` preserves existing behavior exactly.
@@ -803,35 +778,34 @@ detector-pipeline-yolof-autoloop/
 ├── config.yaml                    # Approach A: DAG with recursive template
 ├── config-sequential.yaml         # Approach B: Unrolled sequential
 ├── template.yaml                  # Clarifai UI template definition
-├── metric-decision-ps/
-│   ├── config.yaml                # Pipeline step compute config (CPU-only)
-│   ├── Dockerfile                 # Lightweight Python 3.11 image
-│   ├── requirements.txt           # Minimal: clarifai SDK only
+├── train-ps/                      # Self-contained training step (copied from detector-pipeline-yolof-ps, with autoloop params)
+│   ├── config.yaml
+│   ├── Dockerfile
+│   ├── requirements.txt
 │   └── 1/
-│       ├── pipeline_step.py       # Entry point (reflection pattern)
-│       └── models/
-│           └── model/
-│               └── 1/
-│                   └── model.py   # MetricDecision.decide() logic
-├── hp-adjust-ps/
-│   ├── config.yaml                # Pipeline step compute config (CPU-only)
-│   ├── Dockerfile                 # Lightweight Python 3.11 image
-│   ├── requirements.txt           # Minimal: clarifai SDK only
-│   └── 1/
-│       ├── pipeline_step.py       # Entry point (reflection pattern)
-│       └── models/
-│           └── model/
-│               └── 1/
-│                   ├── model.py     # HPAdjustment.adjust() logic
-│                   └── strategies.py # schedule/grid/random implementations
+│       ├── pipeline_step.py
+│       └── models/model/
+│           ├── 1/
+│           │   ├── model.py       # MMDetectionYoloF.train() with skip_export + hyperparams_json
+│           │   ├── model_export_helper.py
+│           │   ├── benchmark_model_helper.py
+│           │   └── dataset_helpers.py
+│           ├── config.yaml
+│           ├── Dockerfile
+│           └── requirements.txt
+├── metric-decision-ps/ → ../shared-autoloop/metric-decision-ps/  (symlink)
+├── hp-adjust-ps/ → ../shared-autoloop/hp-adjust-ps/              (symlink)
 ```
 
-## 10. Files to Modify
+## 10. External Pipeline Dependencies
 
-| File | Change | Impact |
-|------|--------|--------|
-| `detector-pipeline-yolof-ps/.../model.py` | Add `/tmp/train_output.json` and individual output param files after training | Additive, no breaking change |
-| `detector-pipeline-eval-yolof-quick-start-ps/.../model.py` | Add `checkpoint_source` and `checkpoint_path` params to `evaluate()` | Backward-compatible (defaults to existing behavior) |
+The autoloop pipeline references one external pipeline step via Argo `templateRef`:
+
+| External Step | Used By | Purpose |
+|---------------|---------|---------|
+| `detector-pipeline-eval-yolof-quick-start-ps` | detector-pipeline-yolof-autoloop | COCO evaluation with `checkpoint_source` param for artifact store loading |
+
+**No external training pipelines are modified.** Each autoloop folder contains its own self-contained `train-ps/` with autoloop-specific parameters (`skip_export`, `hyperparams_json`).
 
 ---
 

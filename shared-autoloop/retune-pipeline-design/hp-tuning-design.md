@@ -1,8 +1,6 @@
 # Design Document: Hyperparameter Tuning Step
 
-**Step ID**: `metric-decision-ps` (renamed from metric-decision to reflect broader scope)
-**Status**: Draft
-**Date**: 2026-04-22
+> **⚠️ DEPRECATED**: This document is an early draft from 2026-04-22 that described a combined metric-decision + HP-adjustment step. The current architecture separates these into two distinct steps:\n> - **Metric Decision**: [metric-decision-design.md](metric-decision-design.md)\n> - **HP Adjustment**: [hp-adjustment-design.md](hp-adjustment-design.md)\n>\n> This file is kept for historical reference only. Do not use it for implementation.\n\n**Step ID**: `metric-decision-ps` (renamed from metric-decision to reflect broader scope)\n**Status**: ~~Draft~~ **DEPRECATED**\n**Date**: 2026-04-22
 
 ---
 
