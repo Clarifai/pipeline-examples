@@ -61,6 +61,7 @@ def _clamp_hyperparams(next_hps, search_space):
                 step = spec.get("step", 1)
                 clamped[key] = max(low, min(high, value))
                 clamped[key] = round((clamped[key] - low) / step) * step + low
+                clamped[key] = max(low, min(high, clamped[key]))
             elif dist_type == "choice":
                 values = spec["values"]
                 if value not in values:
@@ -113,7 +114,7 @@ def _parse_llm_response(raw_text):
 
 def _call_llm(model_url, system_prompt, user_prompt, temperature):
     """Call a Clarifai-hosted LLM model. Returns raw text response."""
-    from clarifai.client.user import User
+    import requests
 
     # Parse model URL to extract user_id, app_id, model_id
     # URL format: https://clarifai.com/{user_id}/{app_id}/models/{model_id}
@@ -132,21 +133,38 @@ def _call_llm(model_url, system_prompt, user_prompt, temperature):
     model_app_id = parts[model_idx - 1]
     model_id = parts[model_idx + 1]
 
-    # Use the User class to get model and predict
-    user = User(user_id=model_user_id)
-    model = user.app(app_id=model_app_id).model(model_id=model_id)
+    pat = os.environ.get("CLARIFAI_PAT", "")
+    if not pat:
+        raise RuntimeError("CLARIFAI_PAT environment variable is required")
 
-    response = model.predict_by_bytes(
-        input_bytes=user_prompt.encode("utf-8"),
-        input_type="text",
-        inference_params={
-            "temperature": temperature,
-            "max_tokens": 1024,
-            "system_prompt": system_prompt,
-        },
+    api_url = (
+        f"https://api.clarifai.com/v2/users/{model_user_id}"
+        f"/apps/{model_app_id}/models/{model_id}/outputs"
     )
+    payload = {
+        "inputs": [
+            {"data": {"text": {"raw": user_prompt}}}
+        ],
+        "model": {
+            "output_info": {
+                "params": {
+                    "temperature": temperature,
+                    "max_tokens": 1024,
+                    "system_prompt": system_prompt,
+                }
+            }
+        },
+    }
+    headers = {
+        "Authorization": f"Key {pat}",
+        "Content-Type": "application/json",
+    }
 
-    output_text = response.outputs[0].data.text.raw
+    resp = requests.post(api_url, json=payload, headers=headers, timeout=120)
+    resp.raise_for_status()
+    data = resp.json()
+
+    output_text = data["outputs"][0]["data"]["text"]["raw"]
     return output_text
 
 

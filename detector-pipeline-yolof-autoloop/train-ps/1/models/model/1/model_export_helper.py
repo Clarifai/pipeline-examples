@@ -74,9 +74,8 @@ def copy_model_files_and_upload(
     model_id: str = None,
 ):
     try:
-        temp_dir = tempfile.mkdtemp()
-        temp_dir = Path("trained_model_temp")
-        model_dir = Path(temp_dir) / "detector_model"
+        temp_dir = Path(tempfile.mkdtemp())
+        model_dir = temp_dir / "detector_model"
 
         logger.info(f"📁 Creating model package in: {model_dir}")
 

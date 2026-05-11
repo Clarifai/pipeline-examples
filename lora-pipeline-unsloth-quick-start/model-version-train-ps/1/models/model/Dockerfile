@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.13-labs
 # Build context: model-version-train-ps/1/models/model/
-# docker build -f Dockerfile -t lora-serve .
+# docker build -f Dockerfil_amd -t lora-serve .
 FROM --platform=$TARGETPLATFORM vllm/vllm-openai:v0.15.1 as final
 
 COPY --link requirements.txt /home/nonroot/requirements.txt

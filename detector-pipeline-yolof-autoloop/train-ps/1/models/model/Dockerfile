@@ -3,7 +3,6 @@ FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
-RUN echo "Building Clarifai Object Detector Docker image - build process starting!!!!!!"
 RUN apt-get update
 
 COPY --link requirements.txt /home/nonroot/requirements.txt
@@ -27,7 +26,7 @@ RUN mim install "mmdet==3.3.0"
 RUN pip install --no-cache-dir numpy==1.26.4
 
 RUN ["pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
-RUN ["pip", "show", "--no-cache-dir", "clarifai"]
+RUN ["pip", "show", "clarifai"]
 
 ENV NUMBA_CACHE_DIR=/tmp/numba_cache \
     TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_cache \

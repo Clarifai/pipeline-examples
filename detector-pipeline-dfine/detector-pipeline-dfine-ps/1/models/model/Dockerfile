@@ -44,7 +44,7 @@ ENV PATH="/home/nonroot/.local/bin:$VIRTUAL_ENV/bin:$PATH"
 
 # Update clarifai package so we always have latest protocol to the API. Everything should land in /venv
 RUN ["uv", "pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
-RUN ["uv", "pip", "show", "--no-cache-dir", "clarifai"]
+RUN ["uv", "pip", "show", "clarifai"]
 
 # Set the NUMBA cache dir to /tmp
 # Set the TORCHINDUCTOR cache dir to /tmp

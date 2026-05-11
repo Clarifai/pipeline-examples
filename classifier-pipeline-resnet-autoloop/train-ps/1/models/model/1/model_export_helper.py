@@ -84,10 +84,8 @@ def copy_model_files_and_upload(
 ):
     try:
         # Create temporary directory for model package
-        temp_dir = tempfile.mkdtemp()
-        # TODO: this is used to save everything to a fix directory instead of temp; comment out for prod
-        temp_dir = Path("trained_model_temp")
-        model_dir = Path(temp_dir) / "classifier_model"
+        temp_dir = Path(tempfile.mkdtemp())
+        model_dir = temp_dir / "classifier_model"
 
         logger.info(f"📁 Creating model package in: {model_dir}")
 

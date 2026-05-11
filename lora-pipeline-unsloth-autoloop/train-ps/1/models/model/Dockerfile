@@ -7,7 +7,7 @@ COPY --link requirements.txt /home/nonroot/requirements.txt
 
 # vllm base image bundles vllm, torch, CUDA. Install remaining deps on top.
 RUN ["pip", "install", "--no-cache-dir", "-r", "/home/nonroot/requirements.txt"]
-RUN ["pip", "show", "--no-cache-dir", "clarifai"]
+RUN ["pip", "show", "clarifai"]
 
 ENV NUMBA_CACHE_DIR=/tmp/numba_cache \
     TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_cache \
