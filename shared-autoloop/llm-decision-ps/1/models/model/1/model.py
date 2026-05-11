@@ -54,7 +54,7 @@ def _clamp_hyperparams(next_hps, search_space):
             if dist_type in ("log_uniform", "uniform", "int_log_uniform"):
                 low, high = spec["low"], spec["high"]
                 clamped[key] = max(low, min(high, value))
-                if dist_type in ("int_log_uniform", "discrete_uniform"):
+                if dist_type == "int_log_uniform":
                     clamped[key] = round(clamped[key])
             elif dist_type == "discrete_uniform":
                 low, high = spec["low"], spec["high"]

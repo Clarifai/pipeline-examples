@@ -45,7 +45,12 @@ def _metric_passes(value, threshold, direction):
     """Check if metric meets quality gate."""
     if direction == "maximize":
         return value >= threshold
-    return value <= threshold
+    elif direction == "minimize":
+        return value <= threshold
+    else:
+        raise ValueError(
+            f"Invalid metric_direction '{direction}'. Must be 'maximize' or 'minimize'."
+        )
 
 
 def _should_early_stop(hp_history, current_value, primary_metric, direction, min_delta):

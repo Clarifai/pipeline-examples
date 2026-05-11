@@ -301,7 +301,7 @@ class YOLOFEvaluator:
                 )
             img_scale = tuple(image_size_list)
 
-        if checkpoint_source == "path" and config_path:
+        if config_path and os.path.exists(config_path):
             eval_config_path = config_path
             logging.info(f"Using provided config: {eval_config_path}")
         else:
