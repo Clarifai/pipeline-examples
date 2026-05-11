@@ -255,6 +255,8 @@ class UnslothLoRAVLLM(OpenAIModelClass):
             warmup_ratio=warmup_ratio,
             save_steps=save_steps,
             save_strategy="steps",
+            eval_strategy="steps",
+            eval_steps=max(1, max_steps if max_steps > 0 else logging_steps),
             fp16=not torch.cuda.is_bf16_supported(),
             bf16=torch.cuda.is_bf16_supported(),
             optim="adamw_8bit",
@@ -275,6 +277,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         )
         trainer.train()
         logging.info("Training completed")
+        trainer.state.save_to_json(os.path.join(work_dir, "trainer_state.json"))
 
         # STEP 5: Save LoRA adapters
         # Source: unsloth_finetune.py L349-352
@@ -296,7 +299,10 @@ class UnslothLoRAVLLM(OpenAIModelClass):
             logging.info("STEP 6: Uploading adapter to artifact store (skip_export=True)")
             logging.info("=" * 80)
 
-            from model_export_helper import upload_checkpoint_to_artifact
+            try:
+                from .model_export_helper import upload_checkpoint_to_artifact
+            except ImportError:
+                from model_export_helper import upload_checkpoint_to_artifact
 
             upload_checkpoint_to_artifact(
                 adapter_path, user_id, app_id, model_id

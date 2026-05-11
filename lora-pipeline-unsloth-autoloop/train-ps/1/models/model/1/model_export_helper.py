@@ -21,14 +21,27 @@ def upload_checkpoint_to_artifact(checkpoint_path, user_id, app_id, model_id):
     artifacts = Artifact().list(user_id=user_id, app_id=app_id)
     if not any(a.id == artifact_id for a in artifacts):
         Artifact().create(artifact_id=artifact_id, user_id=user_id, app_id=app_id)
-    version = ArtifactVersion().upload(
-        file_path=str(checkpoint_path),
-        artifact_id=artifact_id,
-        user_id=user_id,
-        app_id=app_id,
-        visibility="private",
-    )
-    logger.info(f"Artifact version: {version.id}")
+
+    upload_path = checkpoint_path
+    tarball = None
+    if Path(checkpoint_path).is_dir():
+        tarball = Path(tempfile.gettempdir()) / f"{Path(checkpoint_path).name}.tar.gz"
+        logger.info(f"Tarring directory {checkpoint_path} -> {tarball}")
+        shutil.make_archive(str(tarball).removesuffix(".tar.gz"), "gztar", root_dir=checkpoint_path)
+        upload_path = str(tarball)
+
+    try:
+        version = ArtifactVersion().upload(
+            file_path=str(upload_path),
+            artifact_id=artifact_id,
+            user_id=user_id,
+            app_id=app_id,
+            visibility="private",
+        )
+        logger.info(f"Artifact version: {version.id}")
+    finally:
+        if tarball and tarball.exists():
+            tarball.unlink()
 
 
 def export_and_upload_lora_model(
