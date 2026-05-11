@@ -26,11 +26,7 @@ original BF16 model and the quantized checkpoint.
    second versioned artifact (`eval-report`).
 
 Both phases live in **one** `pipeline_step.py` and share **one** container
-image (`quantize-evaluate-step/Dockerfile`). For a two-step variant —
-separate `quantize-step` and `evaluate-step` that pass the checkpoint via
-a Clarifai artifact, useful when you want to evaluate an already-quantized
-checkpoint without re-quantizing — see
-`../llmcompressor-pipeline-quick-start/`.
+image (`quantize-evaluate-step/Dockerfile`).
 
 ---
 
