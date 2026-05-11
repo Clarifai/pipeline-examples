@@ -1,8 +1,6 @@
 """Upload helper for Eagle3 model — copies to temp dir before upload
 to avoid mutating the original config.yaml.
 
-Adapted from pipeline-examples lora model_export_helper.py pattern.
-
 Two operations:
   - upload_model_version: copy model dir to temp, override config.yaml,
     then call ModelBuilder.upload_model_version().

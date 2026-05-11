@@ -5,11 +5,6 @@
 # (seed=42), takes the first SG_N / UC_N / PB_N rows, mixes, shuffles again,
 # writes qwen3_8b_train.jsonl. Eval = last 200 SG rows (holdout).
 #
-# Env vars:
-#   SG_N   sharegpt rows  (default 24000; 0 disables)
-#   UC_N   ultrachat rows (default 19000; 0 disables)
-#   PB_N   perfectblend rows (default 11000; 0 disables)
-#
 # Output: cache/dataset/qwen3_8b_train.jsonl + cache/dataset/qwen3_8b_eval.jsonl
 set -e
 
@@ -19,9 +14,9 @@ SPECFORGE_DIR=${SPECFORGE_DIR:-/workspace/SpecForge}
 OUT_DIR="$ROOT_DIR/cache/dataset"
 mkdir -p "$OUT_DIR"
 
-SG_N=${SG_N:-24000}
-UC_N=${UC_N:-19000}
-PB_N=${PB_N:-11000}
+SG_N=${SG_N:-12000}
+UC_N=${UC_N:-10000}
+PB_N=${PB_N:-5000}
 
 LOG="$ROOT_DIR/logs/01_prepare_data_$(date +%Y%m%d_%H%M%S).log"
 mkdir -p "$(dirname "$LOG")"

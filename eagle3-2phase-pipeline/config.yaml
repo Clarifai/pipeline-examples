@@ -15,35 +15,35 @@ pipeline:
         arguments:
           parameters:
             - name: sg_n
-              value: "24000"
+              value: "12000"
             - name: uc_n
-              value: "19000"
+              value: "10000"
             - name: pb_n
-              value: "11000"
+              value: "5000"
             - name: sg_target
-              value: "25000"
+              value: "15000"
             - name: uc_target
-              value: "25000"
+              value: "15000"
             - name: pb_target
-              value: "11000"
+              value: "5000"
             - name: batch_size
-              value: "4"
+              value: "2"
             - name: max_length
-              value: "4096"
+              value: "2048"
             - name: sglang_mem_frac
               value: "0.6"
             - name: dataloader_num_workers
               value: "8"
             - name: phase1_epochs
-              value: "10"
+              value: "3"
             - name: phase2_epochs
-              value: "6"
+              value: "3"
             - name: learning_rate
               value: "2e-5"
             - name: regen_temperature
               value: "0.8"
             - name: app_id
-              value: "eagle3-pipeline"
+              value: "pipeline-app"
             - name: model_id
               value: "qwen3-8b-eagle3"
         templates:

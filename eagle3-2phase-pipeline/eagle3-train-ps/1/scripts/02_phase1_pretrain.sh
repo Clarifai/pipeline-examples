@@ -2,11 +2,8 @@
 # Step 2 — Phase-1 pretraining of the Eagle3 draft head for Qwen3-8B.
 #
 # Env vars (all have defaults; override any of them to tune):
-#   PHASE1_EPOCHS            num epochs (default 10)
-#   MAX_LENGTH               max seq length (default 4096)
-#   BATCH_SIZE               per-device batch (default 4)
-#   SGLANG_MEM_FRAC          sglang mem fraction (default 0.6)
-#   DATALOADER_NUM_WORKERS   torch dataloader workers (default 8)
+#   PHASE1_EPOCHS, MAX_LENGTH, BATCH_SIZE, SGLANG_MEM_FRAC,
+#   DATALOADER_NUM_WORKERS, SAVE_INTERVAL, EVAL_INTERVAL
 #
 # Reads:  cache/dataset/qwen3_8b_train.jsonl, cache/dataset/qwen3_8b_eval.jsonl
 # Writes: outputs/phase1/epoch_*
@@ -19,13 +16,13 @@ SPECFORGE_DIR=${SPECFORGE_DIR:-/workspace/SpecForge}
 export TORCHINDUCTOR_CACHE_DIR=$ROOT_DIR/cache/compiled_kernels
 export CUDA_VISIBLE_DEVICES=0
 
-PHASE1_EPOCHS=${PHASE1_EPOCHS:-10}
-MAX_LENGTH=${MAX_LENGTH:-4096}
-BATCH_SIZE=${BATCH_SIZE:-4}
+PHASE1_EPOCHS=${PHASE1_EPOCHS:-3}
+MAX_LENGTH=${MAX_LENGTH:-2048}
+BATCH_SIZE=${BATCH_SIZE:-2}
 SGLANG_MEM_FRAC=${SGLANG_MEM_FRAC:-0.6}
 DATALOADER_NUM_WORKERS=${DATALOADER_NUM_WORKERS:-8}
-SAVE_INTERVAL=${SAVE_INTERVAL:-2000}
-EVAL_INTERVAL=${EVAL_INTERVAL:-2000}
+SAVE_INTERVAL=${SAVE_INTERVAL:-10000}
+EVAL_INTERVAL=${EVAL_INTERVAL:-10000}
 
 LOG="$ROOT_DIR/logs/02_phase1_$(date +%Y%m%d_%H%M%S).log"
 mkdir -p "$(dirname "$LOG")"

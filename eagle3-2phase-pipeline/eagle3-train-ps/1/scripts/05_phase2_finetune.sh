@@ -1,13 +1,9 @@
 #!/bin/bash
 # Step 5 — Phase-2 fine-tuning on regenerated data, starting from Phase-1 checkpoint.
 #
-# Env vars (all have defaults):
-#   PHASE2_EPOCHS          num epochs (default 6)
-#   LEARNING_RATE          phase-2 LR (default 2e-5)
-#   MAX_LENGTH             max seq length (default 4096)
-#   BATCH_SIZE             per-device batch (default 4)
-#   SGLANG_MEM_FRAC        sglang mem fraction (default 0.6)
-#   DATALOADER_NUM_WORKERS torch dataloader workers (default 8)
+# Env vars (all have defaults; override any of them to tune):
+#   PHASE2_EPOCHS, LEARNING_RATE, MAX_LENGTH, BATCH_SIZE,
+#   SGLANG_MEM_FRAC, DATALOADER_NUM_WORKERS, SAVE_INTERVAL, EVAL_INTERVAL
 #
 # Reads:  cache/dataset/qwen3_8b_regen_combined.jsonl (from step 04)
 #         outputs/phase1/epoch_* (latest)
@@ -22,14 +18,14 @@ DATA_DIR="$ROOT_DIR/cache/dataset"
 export TORCHINDUCTOR_CACHE_DIR=$ROOT_DIR/cache/compiled_kernels
 export CUDA_VISIBLE_DEVICES=0
 
-PHASE2_EPOCHS=${PHASE2_EPOCHS:-6}
+PHASE2_EPOCHS=${PHASE2_EPOCHS:-3}
 LEARNING_RATE=${LEARNING_RATE:-2e-5}
-MAX_LENGTH=${MAX_LENGTH:-4096}
-BATCH_SIZE=${BATCH_SIZE:-4}
+MAX_LENGTH=${MAX_LENGTH:-2048}
+BATCH_SIZE=${BATCH_SIZE:-2}
 SGLANG_MEM_FRAC=${SGLANG_MEM_FRAC:-0.6}
 DATALOADER_NUM_WORKERS=${DATALOADER_NUM_WORKERS:-8}
-SAVE_INTERVAL=${SAVE_INTERVAL:-2000}
-EVAL_INTERVAL=${EVAL_INTERVAL:-2000}
+SAVE_INTERVAL=${SAVE_INTERVAL:-10000}
+EVAL_INTERVAL=${EVAL_INTERVAL:-10000}
 
 LOG="$ROOT_DIR/logs/05_phase2_$(date +%Y%m%d_%H%M%S).log"
 mkdir -p "$(dirname "$LOG")"

@@ -9,35 +9,35 @@ build_info:
 
 pipeline_step_compute_info:
   cpu_limit: "8"
-  cpu_memory: "64Gi"
+  cpu_memory: "128Gi"
   num_accelerators: 1
-  accelerator_memory: "90Gi"
+  accelerator_memory: "80Gi"
   accelerator_type: ["NVIDIA-*"]
 
 pipeline_step_input_params:
   - name: sg_n
-    default: "24000"
+    default: "12000"
     description: "ShareGPT rows in phase-1 blend (0 disables)"
   - name: uc_n
-    default: "19000"
+    default: "10000"
     description: "UltraChat rows in phase-1 blend (0 disables)"
   - name: pb_n
-    default: "11000"
+    default: "5000"
     description: "PerfectBlend rows in phase-1 blend (0 disables)"
   - name: sg_target
-    default: "25000"
+    default: "15000"
     description: "Target ShareGPT rows for phase-2 regen"
   - name: uc_target
-    default: "25000"
+    default: "15000"
     description: "Target UltraChat rows for phase-2 regen"
   - name: pb_target
-    default: "11000"
+    default: "5000"
     description: "Target PerfectBlend rows for phase-2 regen"
   - name: batch_size
-    default: "4"
+    default: "2"
     description: "Per-device batch size for phase-1 and phase-2"
   - name: max_length
-    default: "4096"
+    default: "2048"
     description: "Max sequence length for phase-1 and phase-2"
   - name: sglang_mem_frac
     default: "0.6"
@@ -46,10 +46,10 @@ pipeline_step_input_params:
     default: "8"
     description: "Torch dataloader workers"
   - name: phase1_epochs
-    default: "10"
+    default: "3"
     description: "Number of epochs for phase-1 pretrain"
   - name: phase2_epochs
-    default: "6"
+    default: "3"
     description: "Number of epochs for phase-2 finetune"
   - name: learning_rate
     default: "2e-5"
@@ -58,7 +58,7 @@ pipeline_step_input_params:
     default: "0.8"
     description: "Sampling temperature for regen (0 = greedy, >0 = sampled)"
   - name: app_id
-    default: "eagle3-pipeline"
+    default: "pipeline-app"
     description: "Clarifai app ID for model upload"
   - name: model_id
     default: "qwen3-8b-eagle3"

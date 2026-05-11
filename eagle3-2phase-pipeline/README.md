@@ -4,9 +4,6 @@ Pipeline template for Eagle3 speculative decoding draft head training using Spec
 Runs the complete two-phase training end-to-end in a single pipeline run, followed by
 model upload to Clarifai.
 
-All parameters have production defaults. Override any subset for a quick sanity check
-or custom training run.
-
 ## Structure
 
 ```
@@ -27,8 +24,6 @@ eagle3-2phase-pipeline/
 
 ## Setup
 
-### 1. Initialize from template
-
 ```bash
 pip install clarifai
 clarifai login
@@ -41,71 +36,37 @@ cd eagle3-2phase-pipeline
 
 Or if cloning directly, replace `<YOUR_USER_ID>` and `<YOUR_APP_ID>` in `config.yaml` and `eagle3-train-ps/config.yaml`.
 
-### 2. Upload pipeline
+## Upload pipeline and run
 
 ```bash
 clarifai pipeline upload .
-```
 
-### 3. Run pipeline
-
-```bash
-# Full production training (all defaults, several hours)
-clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
-    --set app_id="<YOUR_APP_ID>"
-
-# Quick sanity check (~40 min)
+# Quick sanity check (~1 hr)
 clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
     --set sg_n="100" --set uc_n="100" --set pb_n="100" \
     --set sg_target="300" --set uc_target="300" --set pb_target="300" \
     --set batch_size="2" --set max_length="1024" --set sglang_mem_frac="0.5" \
     --set phase1_epochs="1" --set phase2_epochs="3" --set learning_rate="5e-5" \
     --set regen_temperature="0" \
-    --set app_id="<YOUR_APP_ID>" \
     --set model_id="qwen3-8b-eagle3-test"
+
+# Full training with defaults (~1.5 days on a single GPU)
+clarifai pipeline run --config config-lock.yaml --instance <gpu-instance>
+
 ```
 
-## Tuneable parameters
+To use your own cluster and nodepool, replace `--instance <gpu-instance>` with `--compute_cluster_id <your-cluster-id> --nodepool_id <your-nodepool-id>`.
 
-All parameters have defaults. Override only what you need.
+## Run locally
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `sg_n` | 24000 | ShareGPT rows in phase-1 blend (0 disables) |
-| `uc_n` | 19000 | UltraChat rows (0 disables) |
-| `pb_n` | 11000 | PerfectBlend rows (0 disables) |
-| `sg_target` | 25000 | Target ShareGPT rows for phase-2 regen |
-| `uc_target` | 25000 | Target UltraChat rows for phase-2 regen |
-| `pb_target` | 11000 | Target PerfectBlend rows for phase-2 regen |
-| `batch_size` | 4 | Per-device batch size |
-| `max_length` | 4096 | Max sequence length |
-| `sglang_mem_frac` | 0.6 | SGLang memory fraction |
-| `dataloader_num_workers` | 8 | Torch dataloader workers |
-| `phase1_epochs` | 10 | Phase-1 pretrain epochs |
-| `phase2_epochs` | 6 | Phase-2 finetune epochs |
-| `learning_rate` | 2e-5 | Phase-2 LR (phase-1 is hardcoded 1e-4) |
-| `regen_temperature` | 0.8 | Regen sampling temp (0 = greedy/deterministic) |
-| `app_id` | eagle3-pipeline | Clarifai app ID for model upload |
-| `model_id` | qwen3-8b-eagle3 | Clarifai model ID for upload |
-
-**Tip:** For better draft head quality, increase `phase1_epochs` (up to 10) and `phase2_epochs` (up to 6). More epochs improve token prediction accuracy at the cost of longer training time. The defaults are tuned for a reasonable balance of quality and speed.
-
-## Local testing
-
-Build and test in Docker before deploying to cloud.
-Requires a GPU with at least 80GB VRAM (e.g. GH200, A100 80GB, H100). GPU must be free.
-
-### Required environment variables
+Requires a GPU with at least 80GB VRAM. GPU must be free.
 
 ```bash
 export CLARIFAI_PAT="..."           # Clarifai PAT for model upload
 export CLARIFAI_USER_ID="..."       # Your Clarifai user ID
-export CLARIFAI_APP_ID="..."        # Your Clarifai app ID
-```
 
-```bash
 # Build
-cd eagle3-2phase-pipeline/eagle3-train-ps
+cd eagle3-train-ps
 docker build -t eagle3-train-ps:local .
 
 # Start container
@@ -116,7 +77,7 @@ docker run -d --name eagle3-test \
     -v $HOME/.cache/huggingface:/workspace/eagle3/cache/huggingface \
     --entrypoint bash eagle3-train-ps:local -c "tail -f /dev/null"
 
-# Quick sanity check (~40 min)
+# Quick sanity check (~1 hr)
 docker exec eagle3-test bash -c \
     "cd /home/nonroot/main && python3 1/pipeline_step.py \
     --sg_n 100 --uc_n 100 --pb_n 100 \
@@ -127,7 +88,7 @@ docker exec eagle3-test bash -c \
     --app_id <YOUR_APP_ID> \
     --model_id qwen3-8b-eagle3-test"
 
-# Full production training (several hours)
+# Full training with defaults (~2 days on a single GPU)
 docker exec eagle3-test bash -c \
     "cd /home/nonroot/main && python3 1/pipeline_step.py \
     --app_id <YOUR_APP_ID>"
@@ -137,6 +98,29 @@ docker rm -f eagle3-test
 ```
 
 In cloud, `CLARIFAI_PAT` and `CLARIFAI_USER_ID` are auto-injected by the platform.
+
+## Tuneable parameters
+
+All parameters have defaults. Override only what you need.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `sg_n` | 12000 | ShareGPT rows in phase-1 blend (0 disables) |
+| `uc_n` | 10000 | UltraChat rows (0 disables) |
+| `pb_n` | 5000 | PerfectBlend rows (0 disables) |
+| `sg_target` | 15000 | Target ShareGPT rows for phase-2 regen |
+| `uc_target` | 15000 | Target UltraChat rows for phase-2 regen |
+| `pb_target` | 5000 | Target PerfectBlend rows for phase-2 regen |
+| `batch_size` | 2 | Per-device batch size |
+| `max_length` | 2048 | Max sequence length |
+| `sglang_mem_frac` | 0.6 | SGLang memory fraction |
+| `dataloader_num_workers` | 8 | Torch dataloader workers |
+| `phase1_epochs` | 3 | Phase-1 pretrain epochs |
+| `phase2_epochs` | 3 | Phase-2 finetune epochs |
+| `learning_rate` | 2e-5 | Phase-2 LR (phase-1 is hardcoded 1e-4) |
+| `regen_temperature` | 0.8 | Regen sampling temp (0 = greedy/deterministic) |
+| `app_id` | pipeline-app | Clarifai app ID for model upload |
+| `model_id` | qwen3-8b-eagle3 | Clarifai model ID for upload |
 
 ## Training flow
 

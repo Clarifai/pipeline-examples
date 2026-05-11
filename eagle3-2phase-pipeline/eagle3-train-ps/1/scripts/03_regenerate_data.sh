@@ -11,11 +11,11 @@
 #
 # Env vars:
 #   REGEN_TEMPERATURE  sampling temp (default 0.8; 0 → greedy, otherwise sampled)
-#
+
 # Usage:
-#   bash scripts/03_regenerate_data.sh sharegpt     25000
-#   bash scripts/03_regenerate_data.sh ultrachat    25000
-#   bash scripts/03_regenerate_data.sh perfectblend 11000
+#   bash scripts/03_regenerate_data.sh sharegpt     <num_samples>
+#   bash scripts/03_regenerate_data.sh ultrachat    <num_samples>
+#   bash scripts/03_regenerate_data.sh perfectblend <num_samples>
 set -e
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
