@@ -30,11 +30,12 @@ cd "$SPECFORGE_DIR"
 [ "$PB_N" -gt 0 ] && { python scripts/prepare_data.py --dataset perfectblend --output-path "$OUT_DIR" \
     || echo "WARN: perfectblend failed — continuing without it"; }
 
-python <<PY
-import json, os, random
+python3 - "$OUT_DIR" "$SG_N" "$UC_N" "$PB_N" "$ROOT_DIR" <<'PY'
+import json, os, random, sys
 random.seed(42)
-OUT = "$OUT_DIR"
-sg_n, uc_n, pb_n = int("$SG_N"), int("$UC_N"), int("$PB_N")
+OUT = sys.argv[1]
+sg_n, uc_n, pb_n = int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+ROOT_DIR = sys.argv[5]
 
 def load(p):
     if not os.path.isfile(p): return []
@@ -61,8 +62,8 @@ print(f"Wrote {len(mixed)} -> {out}")
 import shutil
 hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 for p in [
-    os.path.join("$ROOT_DIR", "cache", "processed_dataset"),
-    os.path.join("$ROOT_DIR", "cache", "vocab_mapping"),
+    os.path.join(ROOT_DIR, "cache", "processed_dataset"),
+    os.path.join(ROOT_DIR, "cache", "vocab_mapping"),
     os.path.join(hf_home, "datasets", "generator"),
 ]:
     if os.path.isdir(p):

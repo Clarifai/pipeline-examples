@@ -114,9 +114,12 @@ def main():
     subprocess.run(["bash", "scripts/01_prepare_data.sh"], cwd=WORKSPACE, env=env, check=True)
     subprocess.run(["bash", "scripts/02_phase1_pretrain.sh"], cwd=WORKSPACE, env=env, check=True)
     cleanup_checkpoints(os.path.join(WORKSPACE, "outputs/phase1"))
-    subprocess.run(["bash", "scripts/03_regenerate_data.sh", "sharegpt",     args.sg_target], cwd=WORKSPACE, env=env, check=True)
-    subprocess.run(["bash", "scripts/03_regenerate_data.sh", "ultrachat",    args.uc_target], cwd=WORKSPACE, env=env, check=True)
-    subprocess.run(["bash", "scripts/03_regenerate_data.sh", "perfectblend", args.pb_target], cwd=WORKSPACE, env=env, check=True)
+    if int(args.sg_target) > 0:
+        subprocess.run(["bash", "scripts/03_regenerate_data.sh", "sharegpt",     args.sg_target], cwd=WORKSPACE, env=env, check=True)
+    if int(args.uc_target) > 0:
+        subprocess.run(["bash", "scripts/03_regenerate_data.sh", "ultrachat",    args.uc_target], cwd=WORKSPACE, env=env, check=True)
+    if int(args.pb_target) > 0:
+        subprocess.run(["bash", "scripts/03_regenerate_data.sh", "perfectblend", args.pb_target], cwd=WORKSPACE, env=env, check=True)
     subprocess.run(["bash", "scripts/04_combine_regen.sh"], cwd=WORKSPACE, env=env, check=True)
     subprocess.run(["bash", "scripts/05_phase2_finetune.sh"], cwd=WORKSPACE, env=env, check=True)
     cleanup_checkpoints(os.path.join(WORKSPACE, "outputs/phase2"))

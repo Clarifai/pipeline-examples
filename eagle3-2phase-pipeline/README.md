@@ -34,8 +34,6 @@ clarifai pipeline init --template=eagle3-2phase-pipeline
 cd eagle3-2phase-pipeline
 ```
 
-Or if cloning directly, replace `<YOUR_USER_ID>` and `<YOUR_APP_ID>` in `config.yaml` and `eagle3-train-ps/config.yaml`.
-
 ## Upload pipeline and run
 
 ```bash
@@ -99,7 +97,7 @@ docker rm -f eagle3-test
 
 In cloud, `CLARIFAI_PAT` and `CLARIFAI_USER_ID` are auto-injected by the platform.
 
-## Tuneable parameters
+## Tunable parameters
 
 All parameters have defaults. Override only what you need.
 

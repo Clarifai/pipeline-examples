@@ -32,7 +32,7 @@ mkdir -p "$(dirname "$LOG")"
 exec > >(tee -a "$LOG") 2>&1
 
 MODEL=Qwen/Qwen3-8B
-MEM_FRAC=0.75
+MEM_FRAC=${SGLANG_MEM_FRAC:-0.75}
 CONCURRENCY=64
 MAX_TOKENS=4096
 

@@ -1,5 +1,5 @@
 pipeline:
-  id: "eagle3-2phase-pipeline"
+  id: "<YOUR_PIPELINE_ID>"
   user_id: "<YOUR_USER_ID>"
   app_id: "<YOUR_APP_ID>"
   step_directories:
@@ -9,7 +9,7 @@ pipeline:
       apiVersion: argoproj.io/v1alpha1
       kind: Workflow
       metadata:
-        generateName: eagle3-2phase-pipeline
+        generateName: <YOUR_PIPELINE_ID>
       spec:
         entrypoint: sequence
         arguments:
