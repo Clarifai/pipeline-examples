@@ -57,9 +57,6 @@ class MetricDecision:
         current_hyperparams: str = "{}",
         early_stop_min_delta: float = 0.0,
         overfitting_detection: bool = False,
-        model_id: str = "",
-        user_id: str = "",
-        app_id: str = "",
     ) -> str:
         """Compare eval metrics against threshold and output a routing decision.
 

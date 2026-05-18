@@ -66,9 +66,6 @@ class HPAdjustment:
         unfreeze_on_retry: bool = True,
         is_overfitting: bool = False,
         seed: int = 42,
-        model_id: str = "",
-        user_id: str = "",
-        app_id: str = "",
     ) -> str:
         """Generate adjusted hyperparameters for the next training iteration.
 
@@ -166,25 +163,5 @@ class HPAdjustment:
         logging.info(f"[HP Adjust] Changes: {changes}")
         if overfit_applied:
             logging.info(f"[HP Adjust] Overfit corrections applied for {task_type}")
-
-        # ── Upload HP overrides artifact for base pipeline consumption ──
-        if model_id and user_id and app_id and new_hps:
-            try:
-                from clarifai.client.artifact import Artifact
-                from clarifai.client.artifact_version import ArtifactVersion
-
-                hp_artifact_id = f"{model_id}_hp_overrides"
-                artifacts = Artifact().list(user_id=user_id, app_id=app_id)
-                if not any(a.id == hp_artifact_id for a in artifacts):
-                    Artifact().create(artifact_id=hp_artifact_id, user_id=user_id, app_id=app_id)
-                ArtifactVersion().upload(
-                    data=json.dumps(new_hps),
-                    artifact_id=hp_artifact_id,
-                    user_id=user_id, app_id=app_id,
-                    visibility="private",
-                )
-                logging.info(f"[Artifact] Uploaded HP overrides: {hp_artifact_id}")
-            except Exception as e:
-                logging.warning(f"[Artifact] Failed to upload HP overrides: {e}")
 
         return output_path

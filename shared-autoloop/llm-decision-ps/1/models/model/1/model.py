@@ -220,9 +220,6 @@ class LLMDecision:
         llm_temperature: float = 0.1,
         llm_max_retries: int = 3,
         seed: int = 42,
-        model_id: str = "",
-        user_id: str = "",
-        app_id: str = "",
     ) -> str:
         """LLM-based decision + HP generation with fallback to hardcoded logic.
 
@@ -423,25 +420,4 @@ class LLMDecision:
             json.dump(full_output, f, indent=2)
 
         logging.info(f"Decision: {decision} | Method: {metadata.get('method')} | Reasoning: {reasoning}")
-
-        # ── Upload HP overrides artifact for base pipeline consumption ──
-        if model_id and user_id and app_id and next_hps:
-            try:
-                from clarifai.client.artifact import Artifact
-                from clarifai.client.artifact_version import ArtifactVersion
-
-                hp_artifact_id = f"{model_id}_hp_overrides"
-                artifacts = Artifact().list(user_id=user_id, app_id=app_id)
-                if not any(a.id == hp_artifact_id for a in artifacts):
-                    Artifact().create(artifact_id=hp_artifact_id, user_id=user_id, app_id=app_id)
-                ArtifactVersion().upload(
-                    data=json.dumps(next_hps),
-                    artifact_id=hp_artifact_id,
-                    user_id=user_id, app_id=app_id,
-                    visibility="private",
-                )
-                logging.info(f"[Artifact] Uploaded HP overrides: {hp_artifact_id}")
-            except Exception as e:
-                logging.warning(f"[Artifact] Failed to upload HP overrides: {e}")
-
         return output_path

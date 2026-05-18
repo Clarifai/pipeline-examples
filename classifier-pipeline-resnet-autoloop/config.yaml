@@ -12,6 +12,362 @@ pipeline:
         entrypoint: autoloop
         arguments:
           parameters:
+            # ── ResNet training parameters ──
+            - name: user_id
+              value: "<YOUR_USER_ID>"
+            - name: app_id
+              value: "<YOUR_APP_ID>"
+            - name: model_id
+              value: "test_model"
+            - name: dataset_id
+              value: "<YOUR_DATASET_ID>"
+            - name: dataset_version_id
+              value: ""
+            - name: concepts
+              value: '["beignets","hamburger","prime_rib","ramen"]'
+            - name: num_epochs
+              value: "200"
+            - name: batch_size
+              value: "64"
+            - name: image_size
+              value: "224"
+            - name: per_item_lrate
+              value: "0.00001953125"
+            - name: weight_decay
+              value: "0.01"
+            - name: per_item_min_lrate
+              value: "1.5625e-8"
+            - name: warmup_iters
+              value: "5"
+            - name: warmup_ratio
+              value: "0.0001"
+            - name: flip_probability
+              value: "0.5"
+            - name: flip_direction
+              value: "horizontal"
+            - name: concepts_mutually_exclusive
+              value: "false"
+            - name: pretrained_weights
+              value: "ImageNet-1k"
+            - name: seed
+              value: "-1"
+            # ── Autoloop-specific parameters ──
+            - name: task_type
+              value: "classification"
+            - name: metric_threshold
+              value: "0.85"
+            - name: primary_metric
+              value: "auto"
+            - name: metric_direction
+              value: "auto"
+            - name: max_retrain_iterations
+              value: "3"
+            - name: tuning_strategy
+              value: "schedule"
+            - name: search_space
+              value: "auto"
+            - name: lr_decay_factor
+              value: "0.5"
+            - name: unfreeze_on_retry
+              value: "false"
+            - name: early_stop_min_delta
+              value: "0.0"
+            - name: overfitting_detection
+              value: "false"
+            # ── LLM decision parameters ──
+            - name: llm_model_url
+              value: ""
+            - name: task_description
+              value: "Image classification model (ResNet) training with top-k accuracy metrics."
+            - name: llm_temperature
+              value: "0.1"
+            - name: llm_max_retries
+              value: "3"
+            # ── Loop state parameters ──
+            - name: current_iteration
+              value: "1"
+            - name: current_hyperparams
+              value: "{}"
+            - name: hp_history
+              value: "[]"
+
+        templates:
+          # ── Main DAG ──────────────────────────────────────────────
+          - name: autoloop
+            inputs:
+              parameters:
+                - name: current_iteration
+                - name: current_hyperparams
+                - name: hp_history
+            dag:
+              tasks:
+                # ── STEP 0: Expand HP overrides into individual params ──
+                - name: hp-expand
+                  template: hp-expand
+                  arguments:
+                    parameters:
+                      - name: current_hyperparams
+                        value: "{{inputs.parameters.current_hyperparams}}"
+
+                # ── STEP 1: Train (base ResNet pipeline, unmodified) ──
+                - name: train
+                  depends: "hp-expand.Succeeded"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/classifier-pipeline-resnet-ps/versions/<TRAIN_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/classifier-pipeline-resnet-ps/versions/<TRAIN_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: user_id
+                        value: "{{workflow.parameters.user_id}}"
+                      - name: app_id
+                        value: "{{workflow.parameters.app_id}}"
+                      - name: model_id
+                        value: "{{workflow.parameters.model_id}}"
+                      - name: dataset_id
+                        value: "{{workflow.parameters.dataset_id}}"
+                      - name: dataset_version_id
+                        value: "{{workflow.parameters.dataset_version_id}}"
+                      - name: concepts
+                        value: "{{workflow.parameters.concepts}}"
+                      - name: num_epochs
+                        value: "{{tasks.hp-expand.outputs.parameters.num_epochs}}"
+                      - name: batch_size
+                        value: "{{tasks.hp-expand.outputs.parameters.batch_size}}"
+                      - name: image_size
+                        value: "{{workflow.parameters.image_size}}"
+                      - name: per_item_lrate
+                        value: "{{tasks.hp-expand.outputs.parameters.per_item_lrate}}"
+                      - name: weight_decay
+                        value: "{{tasks.hp-expand.outputs.parameters.weight_decay}}"
+                      - name: per_item_min_lrate
+                        value: "{{workflow.parameters.per_item_min_lrate}}"
+                      - name: warmup_iters
+                        value: "{{workflow.parameters.warmup_iters}}"
+                      - name: warmup_ratio
+                        value: "{{workflow.parameters.warmup_ratio}}"
+                      - name: flip_probability
+                        value: "{{workflow.parameters.flip_probability}}"
+                      - name: flip_direction
+                        value: "{{workflow.parameters.flip_direction}}"
+                      - name: concepts_mutually_exclusive
+                        value: "{{workflow.parameters.concepts_mutually_exclusive}}"
+                      - name: pretrained_weights
+                        value: "{{workflow.parameters.pretrained_weights}}"
+                      - name: seed
+                        value: "{{workflow.parameters.seed}}"
+
+                # ── STEP 2: Evaluate (separate eval step) ──
+                - name: eval
+                  depends: "train.Succeeded"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/classifier-eval-ps/versions/<EVAL_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/classifier-eval-ps/versions/<EVAL_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: user_id
+                        value: "{{workflow.parameters.user_id}}"
+                      - name: app_id
+                        value: "{{workflow.parameters.app_id}}"
+                      - name: model_id
+                        value: "{{workflow.parameters.model_id}}"
+                      - name: dataset_id
+                        value: "{{workflow.parameters.dataset_id}}"
+                      - name: dataset_version_id
+                        value: "{{workflow.parameters.dataset_version_id}}"
+                      - name: concepts
+                        value: "{{workflow.parameters.concepts}}"
+                      - name: image_size
+                        value: "{{workflow.parameters.image_size}}"
+                      - name: batch_size
+                        value: "{{workflow.parameters.batch_size}}"
+
+                # ── STEP 3: LLM Decision ──
+                - name: llm-decide
+                  depends: "eval.Succeeded"
+                  templateRef:
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/llm-decision-ps/versions/<LLM_DECISION_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/llm-decision-ps/versions/<LLM_DECISION_PS_VERSION>
+                  arguments:
+                    parameters:
+                      - name: eval_results_json
+                        value: "{{tasks.eval.outputs.parameters.eval_results}}"
+                      - name: task_type
+                        value: "{{workflow.parameters.task_type}}"
+                      - name: task_description
+                        value: "{{workflow.parameters.task_description}}"
+                      - name: primary_metric
+                        value: "{{workflow.parameters.primary_metric}}"
+                      - name: metric_direction
+                        value: "{{workflow.parameters.metric_direction}}"
+                      - name: metric_threshold
+                        value: "{{workflow.parameters.metric_threshold}}"
+                      - name: current_iteration
+                        value: "{{inputs.parameters.current_iteration}}"
+                      - name: max_retrain_iterations
+                        value: "{{workflow.parameters.max_retrain_iterations}}"
+                      - name: hp_history
+                        value: "{{inputs.parameters.hp_history}}"
+                      - name: current_hyperparams
+                        value: "{{inputs.parameters.current_hyperparams}}"
+                      - name: search_space
+                        value: "{{workflow.parameters.search_space}}"
+                      - name: tuning_strategy
+                        value: "{{workflow.parameters.tuning_strategy}}"
+                      - name: lr_decay_factor
+                        value: "{{workflow.parameters.lr_decay_factor}}"
+                      - name: unfreeze_on_retry
+                        value: "{{workflow.parameters.unfreeze_on_retry}}"
+                      - name: early_stop_min_delta
+                        value: "{{workflow.parameters.early_stop_min_delta}}"
+                      - name: overfitting_detection
+                        value: "{{workflow.parameters.overfitting_detection}}"
+                      - name: llm_model_url
+                        value: "{{workflow.parameters.llm_model_url}}"
+                      - name: llm_temperature
+                        value: "{{workflow.parameters.llm_temperature}}"
+                      - name: llm_max_retries
+                        value: "{{workflow.parameters.llm_max_retries}}"
+                      - name: seed
+                        value: "{{workflow.parameters.seed}}"
+
+                # ── BRANCH: Deploy (model already exported by train step) ──
+                - name: deploy-success
+                  depends: "llm-decide.Succeeded"
+                  when: "{{tasks.llm-decide.outputs.parameters.decision}} == deploy"
+                  template: deploy-report
+                  arguments:
+                    parameters:
+                      - name: final_metric
+                        value: "{{tasks.llm-decide.outputs.parameters.metric_value}}"
+                      - name: metric_name
+                        value: "{{tasks.llm-decide.outputs.parameters.metric_name}}"
+                      - name: iterations_run
+                        value: "{{tasks.llm-decide.outputs.parameters.current_iteration}}"
+
+                # ── STEP 4: Recursive Retrain ──
+                - name: retrain
+                  depends: "llm-decide.Succeeded"
+                  when: "{{tasks.llm-decide.outputs.parameters.decision}} == retrain"
+                  template: autoloop
+                  arguments:
+                    parameters:
+                      - name: current_iteration
+                        value: "{{tasks.llm-decide.outputs.parameters.next_iteration}}"
+                      - name: current_hyperparams
+                        value: "{{tasks.llm-decide.outputs.parameters.hyperparams_json}}"
+                      - name: hp_history
+                        value: "{{tasks.llm-decide.outputs.parameters.hp_history}}"
+
+                # ── BRANCH: Stop → Report ──
+                - name: report-failure
+                  depends: "llm-decide.Succeeded"
+                  when: "{{tasks.llm-decide.outputs.parameters.decision}} == stop"
+                  template: failure-report
+                  arguments:
+                    parameters:
+                      - name: final_metric
+                        value: "{{tasks.llm-decide.outputs.parameters.metric_value}}"
+                      - name: metric_name
+                        value: "{{tasks.llm-decide.outputs.parameters.metric_name}}"
+                      - name: iterations_run
+                        value: "{{tasks.llm-decide.outputs.parameters.current_iteration}}"
+
+          # ── HP Expand Template ─────────────────────────────────────
+          - name: hp-expand
+            inputs:
+              parameters:
+                - name: current_hyperparams
+            outputs:
+              parameters:
+                - name: per_item_lrate
+                  valueFrom:
+                    path: /tmp/per_item_lrate
+                - name: weight_decay
+                  valueFrom:
+                    path: /tmp/weight_decay
+                - name: num_epochs
+                  valueFrom:
+                    path: /tmp/num_epochs
+                - name: batch_size
+                  valueFrom:
+                    path: /tmp/batch_size
+            container:
+              image: python:3.11-slim
+              command: [python, -c]
+              args:
+                - |
+                  import json
+                  hp = json.loads("""{{inputs.parameters.current_hyperparams}}""")
+                  defaults = {
+                      "per_item_lrate": "{{workflow.parameters.per_item_lrate}}",
+                      "weight_decay": "{{workflow.parameters.weight_decay}}",
+                      "num_epochs": "{{workflow.parameters.num_epochs}}",
+                      "batch_size": "{{workflow.parameters.batch_size}}",
+                  }
+                  merged = {**defaults, **{k: str(v) for k, v in hp.items() if k in defaults}}
+                  for key, value in merged.items():
+                      with open(f"/tmp/{key}", "w") as f:
+                          f.write(value)
+                  print(f"HP expand: {merged}")
+
+          # ── Deploy Report Template ───────────────────────────────
+          - name: deploy-report
+            inputs:
+              parameters:
+                - name: final_metric
+                - name: metric_name
+                - name: iterations_run
+            container:
+              image: python:3.11-slim
+              command: [python, -c]
+              args:
+                - |
+                  import json
+                  report = {
+                    "status": "DEPLOYED",
+                    "reason": "Metric threshold met - model exported by train step",
+                    "metric_name": "{{inputs.parameters.metric_name}}",
+                    "final_metric": "{{inputs.parameters.final_metric}}",
+                    "iterations_run": int("{{inputs.parameters.iterations_run}}"),
+                  }
+                  print(json.dumps(report, indent=2))
+
+          # ── Failure Report Template ───────────────────────────────
+          - name: failure-report
+            inputs:
+              parameters:
+                - name: final_metric
+                - name: metric_name
+                - name: iterations_run
+            container:
+              image: python:3.11-slim
+              command: [python, -c]
+              args:
+                - |
+                  import json, sys
+                  report = {
+                    "status": "FAILED",
+                    "reason": "Metric threshold not met after max iterations",
+                    "metric_name": "{{inputs.parameters.metric_name}}",
+                    "final_metric": "{{inputs.parameters.final_metric}}",
+                    "iterations_run": int("{{inputs.parameters.iterations_run}}"),
+                  }
+                  print(json.dumps(report, indent=2))
+                  sys.exit(1)
+pipeline:
+  id: "<YOUR_PIPELINE_ID>"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+  orchestration_spec:
+    argo_orchestration_spec: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: resnet-autoloop-
+      spec:
+        entrypoint: autoloop
+        arguments:
+          parameters:
             # ── Existing ResNet training parameters ──
             - name: user_id
               value: "<YOUR_USER_ID>"
