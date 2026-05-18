@@ -136,6 +136,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
               save_steps: int = 100,
               seed: int = 105,
               skip_export: bool = False,
+              hyperparams_json: str = "{}",
               ) -> str:
         # Uncomment to disable torch.compile/dynamo which can fail on certain platforms (e.g. aarch64 GH200).
         # os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
@@ -144,31 +145,21 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
 
-        # ── Autoloop HP override (no-op if artifact doesn't exist) ──
-        try:
-            from clarifai.client.artifact_version import ArtifactVersion
-            hp_artifact_id = f"{model_id}_hp_overrides"
-            hp_data = ArtifactVersion().download(
-                artifact_id=hp_artifact_id,
-                user_id=user_id,
-                app_id=app_id,
-            )
-            if hp_data:
-                import json
-                hp_overrides = json.loads(hp_data)
-                logging.info(f"[Autoloop] Applying HP overrides from artifact: {hp_overrides}")
-                if "learning_rate" in hp_overrides:
-                    learning_rate = float(hp_overrides["learning_rate"])
-                if "lora_r" in hp_overrides:
-                    lora_r = int(hp_overrides["lora_r"])
-                if "lora_alpha" in hp_overrides:
-                    lora_alpha = int(hp_overrides["lora_alpha"])
-                if "num_epochs" in hp_overrides:
-                    num_epochs = int(hp_overrides["num_epochs"])
-                if "weight_decay" in hp_overrides:
-                    weight_decay = float(hp_overrides["weight_decay"])
-        except Exception:
-            pass  # No artifact = single-shot mode, use defaults
+        # Apply HP overrides from autoloop decision step
+        import json as _json_hp
+        hp_overrides = _json_hp.loads(hyperparams_json) if isinstance(hyperparams_json, str) else hyperparams_json
+        if hp_overrides:
+            logging.info(f"Applying hyperparameter overrides: {hp_overrides}")
+            if "learning_rate" in hp_overrides:
+                learning_rate = float(hp_overrides["learning_rate"])
+            if "lora_r" in hp_overrides:
+                lora_r = int(hp_overrides["lora_r"])
+            if "lora_alpha" in hp_overrides:
+                lora_alpha = int(hp_overrides["lora_alpha"])
+            if "num_epochs" in hp_overrides:
+                num_epochs = int(hp_overrides["num_epochs"])
+            if "weight_decay" in hp_overrides:
+                weight_decay = float(hp_overrides["weight_decay"])
 
         work_dir = "/tmp/lora_work_dir"
         os.makedirs(work_dir, exist_ok=True)

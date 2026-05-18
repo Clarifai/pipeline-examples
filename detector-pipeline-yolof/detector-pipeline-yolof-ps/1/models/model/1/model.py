@@ -98,32 +98,24 @@ class MMDetectionYoloF(VisualDetectorClass):
               frozen_stages: int = 1,
               inference_max_batch_size: int = 2,
               skip_export: bool = False,
+              hyperparams_json: str = "{}",
               ) -> str:
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
 
-        # ── Autoloop HP override (no-op if artifact doesn't exist) ──
-        try:
-            hp_artifact_id = f"{model_id}_hp_overrides"
-            hp_data = ArtifactVersion().download(
-                artifact_id=hp_artifact_id,
-                user_id=user_id,
-                app_id=app_id,
-            )
-            if hp_data:
-                hp_overrides = json.loads(hp_data)
-                logging.info(f"[Autoloop] Applying HP overrides from artifact: {hp_overrides}")
-                if "per_item_lrate" in hp_overrides:
-                    per_item_lrate = float(hp_overrides["per_item_lrate"])
-                if "frozen_stages" in hp_overrides:
-                    frozen_stages = int(hp_overrides["frozen_stages"])
-                if "num_epochs" in hp_overrides:
-                    num_epochs = int(hp_overrides["num_epochs"])
-                if "batch_size" in hp_overrides:
-                    batch_size = int(hp_overrides["batch_size"])
-        except Exception:
-            pass  # No artifact = single-shot mode, use defaults
+        # Apply HP overrides from autoloop decision step
+        hp_overrides = json.loads(hyperparams_json) if isinstance(hyperparams_json, str) else hyperparams_json
+        if hp_overrides:
+            logging.info(f"Applying hyperparameter overrides: {hp_overrides}")
+            if "per_item_lrate" in hp_overrides:
+                per_item_lrate = float(hp_overrides["per_item_lrate"])
+            if "frozen_stages" in hp_overrides:
+                frozen_stages = int(hp_overrides["frozen_stages"])
+            if "num_epochs" in hp_overrides:
+                num_epochs = int(hp_overrides["num_epochs"])
+            if "batch_size" in hp_overrides:
+                batch_size = int(hp_overrides["batch_size"])
 
         concepts = json.loads(concepts)
         image_size_list = json.loads(image_size) if isinstance(image_size, str) else image_size

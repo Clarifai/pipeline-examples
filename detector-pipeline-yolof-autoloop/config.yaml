@@ -144,6 +144,8 @@ pipeline:
                         value: "{{workflow.parameters.inference_max_batch_size}}"
                       - name: skip_export
                         value: "true"
+                      - name: hyperparams_json
+                        value: "{{inputs.parameters.current_hyperparams}}"
 
                 # ── STEP 2: Evaluate ──
                 - name: eval

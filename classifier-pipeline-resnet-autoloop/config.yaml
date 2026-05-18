@@ -148,6 +148,8 @@ pipeline:
                         value: "{{workflow.parameters.seed}}"
                       - name: skip_export
                         value: "true"
+                      - name: hyperparams_json
+                        value: "{{inputs.parameters.current_hyperparams}}"
 
                 # ── STEP 2: Evaluate (metrics extracted by train step) ──
                 # When skip_export=True, the train step extracts eval metrics
