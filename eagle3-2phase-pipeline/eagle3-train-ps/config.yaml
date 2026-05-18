@@ -15,6 +15,9 @@ pipeline_step_compute_info:
   accelerator_type: ["NVIDIA-*"]
 
 pipeline_step_input_params:
+  - name: pretrained_ckpt
+    default: ""
+    description: "Pretrained Eagle3 checkpoint (Clarifai artifact). If set, skips phase-1."
   - name: sg_n
     default: "12000"
     description: "ShareGPT rows in phase-1 blend (0 disables)"

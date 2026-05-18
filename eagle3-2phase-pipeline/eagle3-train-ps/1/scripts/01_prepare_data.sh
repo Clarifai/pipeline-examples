@@ -70,8 +70,9 @@ for p in [
         shutil.rmtree(p, ignore_errors=True)
         print(f"invalidated cache: {p}")
 
-# Eval set = last 200 SG rows (holdout). Fallback to small slice if SG is tiny.
-ev = sharegpt[-200:] if len(sharegpt) > 400 else sharegpt[:max(20, len(sharegpt)//5)]
+# Eval set — prefer sharegpt, fall back to ultrachat, then perfectblend.
+eval_source = next((d for d in [sharegpt, ultrachat, pb] if d), [])
+ev = eval_source[-200:] if len(eval_source) > 400 else eval_source[:max(20, len(eval_source)//5)]
 evp = os.path.join(OUT, "qwen3_8b_eval.jsonl")
 with open(evp, "w") as f:
     for x in ev:
