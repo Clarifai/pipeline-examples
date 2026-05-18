@@ -104,8 +104,8 @@ pipeline:
                 # ── STEP 1: Train (ResNet classifier) ──
                 - name: train
                   templateRef:
-                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/train-ps/versions/<TRAIN_PS_VERSION>
-                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/train-ps/versions/<TRAIN_PS_VERSION>
+                    name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/classifier-pipeline-resnet-ps/versions/<TRAIN_PS_VERSION>
+                    template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/classifier-pipeline-resnet-ps/versions/<TRAIN_PS_VERSION>
                   arguments:
                     parameters:
                       - name: user_id
@@ -146,8 +146,6 @@ pipeline:
                         value: "{{workflow.parameters.pretrained_weights}}"
                       - name: seed
                         value: "{{workflow.parameters.seed}}"
-                      - name: hyperparams_json
-                        value: "{{inputs.parameters.current_hyperparams}}"
                       - name: skip_export
                         value: "true"
 
@@ -211,6 +209,12 @@ pipeline:
                         value: "{{workflow.parameters.llm_max_retries}}"
                       - name: seed
                         value: "{{workflow.parameters.seed}}"
+                      - name: model_id
+                        value: "{{workflow.parameters.model_id}}"
+                      - name: user_id
+                        value: "{{workflow.parameters.user_id}}"
+                      - name: app_id
+                        value: "{{workflow.parameters.app_id}}"
 
                 # ── BRANCH: Deploy → Export ──
                 - name: export

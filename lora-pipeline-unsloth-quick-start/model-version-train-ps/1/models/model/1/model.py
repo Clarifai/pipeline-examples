@@ -135,6 +135,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
               logging_steps: int = 10,
               save_steps: int = 100,
               seed: int = 105,
+              skip_export: bool = False,
               ) -> str:
         # Uncomment to disable torch.compile/dynamo which can fail on certain platforms (e.g. aarch64 GH200).
         # os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
@@ -142,6 +143,32 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
+
+        # ── Autoloop HP override (no-op if artifact doesn't exist) ──
+        try:
+            from clarifai.client.artifact_version import ArtifactVersion
+            hp_artifact_id = f"{model_id}_hp_overrides"
+            hp_data = ArtifactVersion().download(
+                artifact_id=hp_artifact_id,
+                user_id=user_id,
+                app_id=app_id,
+            )
+            if hp_data:
+                import json
+                hp_overrides = json.loads(hp_data)
+                logging.info(f"[Autoloop] Applying HP overrides from artifact: {hp_overrides}")
+                if "learning_rate" in hp_overrides:
+                    learning_rate = float(hp_overrides["learning_rate"])
+                if "lora_r" in hp_overrides:
+                    lora_r = int(hp_overrides["lora_r"])
+                if "lora_alpha" in hp_overrides:
+                    lora_alpha = int(hp_overrides["lora_alpha"])
+                if "num_epochs" in hp_overrides:
+                    num_epochs = int(hp_overrides["num_epochs"])
+                if "weight_decay" in hp_overrides:
+                    weight_decay = float(hp_overrides["weight_decay"])
+        except Exception:
+            pass  # No artifact = single-shot mode, use defaults
 
         work_dir = "/tmp/lora_work_dir"
         os.makedirs(work_dir, exist_ok=True)
@@ -237,6 +264,8 @@ class UnslothLoRAVLLM(OpenAIModelClass):
             warmup_ratio=warmup_ratio,
             save_steps=save_steps,
             save_strategy="steps",
+            eval_strategy="steps",
+            eval_steps=max(1, max_steps if max_steps > 0 else logging_steps),
             fp16=not torch.cuda.is_bf16_supported(),
             bf16=torch.cuda.is_bf16_supported(),
             optim="adamw_8bit",
@@ -257,6 +286,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         )
         trainer.train()
         logging.info("Training completed")
+        trainer.state.save_to_json(os.path.join(work_dir, "trainer_state.json"))
 
         # STEP 5: Save LoRA adapters
         # Source: unsloth_finetune.py L349-352
@@ -273,18 +303,69 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         torch.cuda.empty_cache()
 
         # STEP 6: Export and Upload Model to Clarifai
-        logging.info("=" * 80)
-        logging.info("STEP 6: Exporting and Uploading Model to Clarifai")
-        logging.info("=" * 80)
+        if skip_export:
+            logging.info("=" * 80)
+            logging.info("STEP 6: Uploading adapter to artifact store (skip_export=True)")
+            logging.info("=" * 80)
 
-        model_template_dir = Path(__file__).parent.parent
-        export_and_upload_lora_model(
-            adapter_path=adapter_path,
-            source_model_dir=model_template_dir,
-            clarifai_pat=pat,
-            clarifai_api_base=os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com"),
-            user_id=user_id, app_id=app_id, model_id=model_id,
-        )
+            try:
+                from .model_export_helper import upload_checkpoint_to_artifact
+            except ImportError:
+                from model_export_helper import upload_checkpoint_to_artifact
+
+            upload_checkpoint_to_artifact(
+                adapter_path, user_id, app_id, model_id
+            )
+
+            # Extract eval metrics from HF Trainer state
+            import json as _json
+            state_path = os.path.join(work_dir, "trainer_state.json")
+            metrics = {}
+            if os.path.exists(state_path):
+                with open(state_path, 'r') as f:
+                    state = _json.load(f)
+                log_history = state.get("log_history", [])
+                for entry in reversed(log_history):
+                    if "eval_loss" in entry:
+                        metrics["eval_loss"] = entry["eval_loss"]
+                        if "eval_runtime" in entry:
+                            metrics["eval_runtime"] = entry["eval_runtime"]
+                        if "perplexity" in entry:
+                            metrics["perplexity"] = entry["perplexity"]
+                        break
+                for entry in reversed(log_history):
+                    if "loss" in entry and "eval_loss" not in entry:
+                        metrics["train_loss"] = entry["loss"]
+                        break
+
+            eval_results = {"metrics": metrics}
+
+            # Write Argo output parameters
+            output_dir = "/tmp"
+            os.makedirs(output_dir, exist_ok=True)
+            outputs = {
+                "output_dir": adapter_path,
+                "artifact_id": f"{model_id}_checkpoint",
+                "eval_results": _json.dumps(eval_results),
+            }
+            for key, value in outputs.items():
+                with open(os.path.join(output_dir, key), 'w') as f:
+                    f.write(str(value))
+            logging.info(f"Eval metrics extracted: {metrics}")
+            logging.info("Argo output parameters written to /tmp/")
+        else:
+            logging.info("=" * 80)
+            logging.info("STEP 6: Exporting and Uploading Model to Clarifai")
+            logging.info("=" * 80)
+
+            model_template_dir = Path(__file__).parent.parent
+            export_and_upload_lora_model(
+                adapter_path=adapter_path,
+                source_model_dir=model_template_dir,
+                clarifai_pat=pat,
+                clarifai_api_base=os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com"),
+                user_id=user_id, app_id=app_id, model_id=model_id,
+            )
 
         logging.info("=" * 80)
         logging.info("PIPELINE COMPLETED SUCCESSFULLY!")

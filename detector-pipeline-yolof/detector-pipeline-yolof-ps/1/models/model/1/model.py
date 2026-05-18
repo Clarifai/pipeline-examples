@@ -97,10 +97,33 @@ class MMDetectionYoloF(VisualDetectorClass):
               pretrained_weights: str = "coco",
               frozen_stages: int = 1,
               inference_max_batch_size: int = 2,
+              skip_export: bool = False,
               ) -> str:
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
+
+        # ── Autoloop HP override (no-op if artifact doesn't exist) ──
+        try:
+            hp_artifact_id = f"{model_id}_hp_overrides"
+            hp_data = ArtifactVersion().download(
+                artifact_id=hp_artifact_id,
+                user_id=user_id,
+                app_id=app_id,
+            )
+            if hp_data:
+                hp_overrides = json.loads(hp_data)
+                logging.info(f"[Autoloop] Applying HP overrides from artifact: {hp_overrides}")
+                if "per_item_lrate" in hp_overrides:
+                    per_item_lrate = float(hp_overrides["per_item_lrate"])
+                if "frozen_stages" in hp_overrides:
+                    frozen_stages = int(hp_overrides["frozen_stages"])
+                if "num_epochs" in hp_overrides:
+                    num_epochs = int(hp_overrides["num_epochs"])
+                if "batch_size" in hp_overrides:
+                    batch_size = int(hp_overrides["batch_size"])
+        except Exception:
+            pass  # No artifact = single-shot mode, use defaults
 
         concepts = json.loads(concepts)
         image_size_list = json.loads(image_size) if isinstance(image_size, str) else image_size
@@ -329,24 +352,61 @@ class MMDetectionYoloF(VisualDetectorClass):
         else:
             logging.warning(f"config.yaml not found at {config_yaml_path}, skipping benchmark")
 
-        logging.info("")
-        logging.info("=" * 80)
-        logging.info("STEP 7: Exporting and Uploading Model to Clarifai")
-        logging.info("=" * 80)
+        if skip_export:
+            logging.info("")
+            logging.info("=" * 80)
+            logging.info("STEP 7: Uploading checkpoint to artifact store (skip_export=True)")
+            logging.info("=" * 80)
 
-        clarifai_api_base = os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com")
+            from model_export_helper import upload_checkpoint_to_artifact
 
-        export_and_upload_detector(
-            weights_path=self.weights_path,
-            config_py_path=self.config_py_path,
-            classes=concepts,
-            source_model_dir=model_template_dir,
-            clarifai_pat=pat,
-            clarifai_api_base=clarifai_api_base,
-            user_id=user_id,
-            app_id=app_id,
-            model_id=model_id,
-        )
+            upload_checkpoint_to_artifact(
+                self.weights_path, user_id, app_id, model_id
+            )
+
+            # Also upload the config to artifact store
+            artifact_id = f"{model_id}_checkpoint"
+            ArtifactVersion().upload(
+                file_path=str(self.config_py_path),
+                artifact_id=artifact_id,
+                user_id=user_id, app_id=app_id,
+                visibility="private",
+            )
+
+            # Write Argo output parameters for downstream steps
+            output_dir = "/tmp"
+            os.makedirs(output_dir, exist_ok=True)
+            outputs = {
+                "checkpoint_path": self.weights_path,
+                "config_path": self.config_py_path,
+                "artifact_id": artifact_id,
+                "user_id": user_id,
+                "app_id": app_id,
+                "model_id": model_id,
+            }
+            for key, value in outputs.items():
+                with open(os.path.join(output_dir, key), 'w') as f:
+                    f.write(str(value))
+            logging.info("Argo output parameters written to /tmp/")
+        else:
+            logging.info("")
+            logging.info("=" * 80)
+            logging.info("STEP 7: Exporting and Uploading Model to Clarifai")
+            logging.info("=" * 80)
+
+            clarifai_api_base = os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com")
+
+            export_and_upload_detector(
+                weights_path=self.weights_path,
+                config_py_path=self.config_py_path,
+                classes=concepts,
+                source_model_dir=model_template_dir,
+                clarifai_pat=pat,
+                clarifai_api_base=clarifai_api_base,
+                user_id=user_id,
+                app_id=app_id,
+                model_id=model_id,
+            )
 
         logging.info("")
         logging.info("=" * 80)
