@@ -1,0 +1,33 @@
+pipeline_step:
+  id: "lora-eval-ps"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  visibility:
+    gettable: PUBLIC
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "4000m"
+  cpu_memory: "32Gi"
+  num_accelerators: 1
+  accelerator_memory: "40Gi"
+  accelerator_type: ["NVIDIA-*"]
+
+pipeline_step_input_params:
+  - name: user_id
+  - name: app_id
+  - name: model_id
+  - name: base_model_name
+    default: "unsloth/Qwen3-0.6B"
+  - name: dataset_name
+    default: "mlabonne/FineTome-100k"
+  - name: max_seq_length
+    default: "2048"
+  - name: max_eval_samples
+    default: "200"
+
+pipeline_step_output_params:
+  - name: eval_results

@@ -1,0 +1,9 @@
+clarifai>=12.4.0
+clarifai-protocol>=0.0.35,<0.1.0
+clarifai-grpc>=12.3.0
+boto3>=1.42.0
+unsloth
+transformers>=4.45.0
+datasets>=2.20.0
+trl>=0.12.0
+peft>=0.13.0

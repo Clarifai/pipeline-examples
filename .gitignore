@@ -183,3 +183,6 @@ tmp
 .venv*/
 
 Dockerfile.test
+
+local-run/
+unsloth_compiled_cache/

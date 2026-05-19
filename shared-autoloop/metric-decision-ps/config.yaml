@@ -1,0 +1,41 @@
+pipeline_step:
+  id: "metric-decision-ps"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  visibility:
+    gettable: PUBLIC
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "1000m"
+  cpu_memory: "2Gi"
+  num_accelerators: 0
+  accelerator_memory: "0"
+  accelerator_type: []
+
+pipeline_step_input_params:
+  - name: eval_results_json
+    description: "Path to the JSON file containing evaluation results"
+  - name: task_type
+    description: "Task type: detection, classification, or llm_finetune"
+  - name: primary_metric
+    description: "Metric name to evaluate (auto resolves per task_type)"
+  - name: metric_direction
+    description: "Whether to maximize or minimize the metric (auto resolves per task_type)"
+  - name: metric_threshold
+    description: "Target threshold the metric must reach for deploy decision"
+  - name: current_iteration
+    description: "Current training iteration number (1-based)"
+  - name: max_retrain_iterations
+    description: "Maximum number of retrain cycles before stopping"
+  - name: hp_history
+    description: "JSON array of previous iteration records"
+  - name: current_hyperparams
+    description: "JSON object of hyperparameters used in this iteration"
+  - name: early_stop_min_delta
+    description: "Minimum improvement between iterations to avoid early stop (0 to disable)"
+  - name: overfitting_detection
+    description: "Enable train/eval loss divergence check for overfitting"
