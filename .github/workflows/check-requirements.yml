@@ -28,15 +28,27 @@ jobs:
               python_version=$(grep '^\s*python_version:' "$config_file" | grep -oE '[0-9]+\.[0-9]+' | head -1)
             fi
 
-            if [ -n "$python_version" ]; then
-              echo "::group::Compiling $req_file (python $python_version)"
-              compile_args=(--python-version "$python_version")
-            else
-              echo "::group::Compiling $req_file"
-              compile_args=()
+            needs_setuptools=false
+            if grep -q 'setuptools' "$req_file"; then
+              needs_setuptools=true
             fi
 
-            if grep -q 'setuptools' "$req_file"; then
+            if [ -n "$python_version" ]; then
+              echo "::group::Compiling $req_file (python $python_version)"
+            else
+              echo "::group::Compiling $req_file"
+            fi
+
+            venv_dir=$(mktemp -d)
+            if [ -n "$python_version" ]; then
+              uv venv "$venv_dir" --python "$python_version"
+            else
+              uv venv "$venv_dir"
+            fi
+
+            compile_args=(--python "$venv_dir")
+            if [ "$needs_setuptools" = "true" ]; then
+              uv pip install --python "$venv_dir" setuptools
               compile_args+=(--no-build-isolation)
             fi
 
@@ -48,6 +60,7 @@ jobs:
               failed_files+=("$req_file")
             fi
             rm -f "$tmp_out"
+            rm -rf "$venv_dir"
             echo "::endgroup::"
           done < <(find . -name requirements.txt -type f | sort)
 
