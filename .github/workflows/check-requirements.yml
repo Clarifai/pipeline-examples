@@ -19,19 +19,23 @@ jobs:
 
       - name: Compile all requirements.txt files
         run: |
-          failed=0
+          failed_files=()
           while IFS= read -r req_file; do
             echo "::group::Compiling $req_file"
             if uv pip compile "$req_file" -o /dev/null; then
               echo "✅ $req_file resolved successfully"
             else
               echo "::error file=$req_file::Failed to resolve dependencies in $req_file"
-              failed=1
+              failed_files+=("$req_file")
             fi
             echo "::endgroup::"
           done < <(find . -name requirements.txt -type f | sort)
 
-          if [ "$failed" -eq 1 ]; then
-            echo "::error::One or more requirements.txt files failed to resolve"
+          if [ ${#failed_files[@]} -gt 0 ]; then
+            echo ""
+            echo "❌ The following requirements.txt files failed to resolve:"
+            for f in "${failed_files[@]}"; do
+              echo "  - $f"
+            done
             exit 1
           fi
