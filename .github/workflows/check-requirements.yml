@@ -1,0 +1,78 @@
+name: Check Requirements
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  check-requirements:
+    name: Validate requirements.txt files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Compile all requirements.txt files
+        run: |
+          failed_files=()
+          while IFS= read -r req_file; do
+            req_dir=$(dirname "$req_file")
+            config_file="$req_dir/config.yaml"
+            python_version=""
+            if [ -f "$config_file" ]; then
+              python_version=$(grep '^\s*python_version:' "$config_file" | grep -oE '[0-9]+\.[0-9]+' | head -1)
+            fi
+
+            needs_setuptools=false
+            if grep -q 'setuptools' "$req_file"; then
+              needs_setuptools=true
+            fi
+
+            if [ -n "$python_version" ]; then
+              echo "::group::Compiling $req_file (python $python_version)"
+            else
+              echo "::group::Compiling $req_file"
+            fi
+
+            venv_dir=$(mktemp -d)
+            if [ -n "$python_version" ]; then
+              uv venv "$venv_dir" --python "$python_version"
+            else
+              uv venv "$venv_dir"
+            fi
+
+            # shellcheck disable=SC1091
+            source "$venv_dir/bin/activate"
+
+            compile_args=()
+            if [ "$needs_setuptools" = "true" ]; then
+              uv pip install "setuptools<82.0.0"
+              compile_args+=(--no-build-isolation)
+            fi
+
+            tmp_out=$(mktemp)
+            if uv pip compile "$req_file" "${compile_args[@]}" -o "$tmp_out"; then
+              echo "✅ $req_file resolved successfully"
+            else
+              echo "::error file=$req_file::Failed to resolve dependencies in $req_file"
+              failed_files+=("$req_file")
+            fi
+            rm -f "$tmp_out"
+            deactivate
+            rm -rf "$venv_dir"
+            echo "::endgroup::"
+          done < <(find . -name requirements.txt -type f | sort)
+
+          if [ ${#failed_files[@]} -gt 0 ]; then
+            echo ""
+            echo "❌ The following requirements.txt files failed to resolve:"
+            for f in "${failed_files[@]}"; do
+              echo "  - $f"
+            done
+            exit 1
+          fi
