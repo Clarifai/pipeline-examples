@@ -3,7 +3,7 @@ pipeline:
   user_id: "<YOUR_USER_ID>"
   app_id: "<YOUR_APP_ID>"
   step_directories:
-    - quantize-step
+    - quantize-evaluate-step
   orchestration_spec:
     argo_orchestration_spec: |
       apiVersion: argoproj.io/v1alpha1
@@ -14,6 +14,7 @@ pipeline:
         entrypoint: sequence
         arguments:
           parameters:
+            # ---- quantize phase ----
             - name: src
               value: "Qwen/Qwen2.5-0.5B-Instruct"
             - name: scheme
@@ -24,19 +25,46 @@ pipeline:
               value: "1"
             - name: out
               value: "/workspace/outputs/quantized_model"
+
+            # ---- evaluate phase ----
+            - name: eval_source
+              value: "true"
+            - name: dataset
+              value: "gpqa_diamond"
+            - name: eval_batch_size
+              value: "32"
+            - name: timeout
+              value: "1500"
+            - name: max_tokens
+              value: "64000"
+            - name: port
+              value: "8000"
+            - name: eval_out
+              value: "/workspace/outputs/eval_report"
+
+            # ---- artifact uploads (shared) ----
+            # Leave user_id / app_id empty to skip uploads. Set them
+            # (or override via `clarifai pipeline run --set user_id=...
+            # --set app_id=...`) to upload the quantized checkpoint and
+            # the eval report as versioned Clarifai artifacts.
             - name: user_id
               value: ""
             - name: app_id
               value: ""
             - name: artifact_id
               value: "quantized-checkpoint"
+            - name: report_artifact_id
+              value: "eval-report"
         templates:
         - name: sequence
           steps:
-          - - name: quantize-step-name
+          # Single step: quantize the source model, smoke-test, upload as a Clarifai artifact,
+          # then serve the local checkpoint with vLLM, run evalscope, and upload the eval
+          # report as a second artifact — all inside one container.
+          - - name: quantize-evaluate-step-name
               templateRef:
-                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/quantize-step
-                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/quantize-step
+                name: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/quantize-evaluate-step
+                template: users/<YOUR_USER_ID>/apps/<YOUR_APP_ID>/pipeline_steps/quantize-evaluate-step
               arguments:
                 parameters:
                   - name: src
@@ -49,9 +77,25 @@ pipeline:
                     value: "{{workflow.parameters.num_gpus}}"
                   - name: out
                     value: "{{workflow.parameters.out}}"
+                  - name: eval_source
+                    value: "{{workflow.parameters.eval_source}}"
+                  - name: dataset
+                    value: "{{workflow.parameters.dataset}}"
+                  - name: eval_batch_size
+                    value: "{{workflow.parameters.eval_batch_size}}"
+                  - name: timeout
+                    value: "{{workflow.parameters.timeout}}"
+                  - name: max_tokens
+                    value: "{{workflow.parameters.max_tokens}}"
+                  - name: port
+                    value: "{{workflow.parameters.port}}"
+                  - name: eval_out
+                    value: "{{workflow.parameters.eval_out}}"
                   - name: user_id
                     value: "{{workflow.parameters.user_id}}"
                   - name: app_id
                     value: "{{workflow.parameters.app_id}}"
                   - name: artifact_id
                     value: "{{workflow.parameters.artifact_id}}"
+                  - name: report_artifact_id
+                    value: "{{workflow.parameters.report_artifact_id}}"
