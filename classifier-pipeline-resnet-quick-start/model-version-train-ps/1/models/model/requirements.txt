@@ -1,6 +1,7 @@
 clarifai>=12.3
 Pillow==12.2.0
 PyYAML==6.0.3
+setuptools
 mmcv==2.2.0
 mmengine==0.10.7
 mmpretrain==1.2.0
