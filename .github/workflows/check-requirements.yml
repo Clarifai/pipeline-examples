@@ -36,6 +36,10 @@ jobs:
               compile_args=()
             fi
 
+            if grep -q 'setuptools' "$req_file"; then
+              compile_args+=(--no-build-isolation)
+            fi
+
             tmp_out=$(mktemp)
             if uv pip compile "$req_file" "${compile_args[@]}" -o "$tmp_out"; then
               echo "✅ $req_file resolved successfully"
