@@ -51,7 +51,7 @@ jobs:
 
             compile_args=()
             if [ "$needs_setuptools" = "true" ]; then
-              uv pip install setuptools
+              uv pip install "setuptools<82.0.0"
               compile_args+=(--no-build-isolation)
             fi
 
