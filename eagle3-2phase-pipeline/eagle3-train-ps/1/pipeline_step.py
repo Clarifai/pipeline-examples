@@ -66,7 +66,7 @@ def _resolve_artifact(artifact_id, version_id, user_id, app_id):
         os.makedirs(extract_dir, exist_ok=True)
         print(f">>> extracting {download_path} -> {extract_dir}", flush=True)
         with tarfile.open(download_path, "r:*") as tar:
-            tar.extractall(extract_dir)
+            tar.extractall(extract_dir, filter="data")
         entries = [e for e in os.listdir(extract_dir) if not e.startswith(".")]
         if len(entries) == 1 and os.path.isdir(os.path.join(extract_dir, entries[0])):
             return os.path.join(extract_dir, entries[0])
@@ -211,7 +211,7 @@ def package_and_upload(env, model_id):
     upload_checkpoint_to_artifact(archive, user_id, app_id, model_id)
 
 
-def upload_phase1_artifact(env):
+def upload_phase1_artifact(env, model_id):
     """Upload phase-1 checkpoint as artifact so it can be used for finetune-only runs."""
     user_id = env.get("CLARIFAI_USER_ID")
     app_id = env.get("CLARIFAI_APP_ID")
@@ -234,7 +234,7 @@ def upload_phase1_artifact(env):
         os.path.join(WORKSPACE, "outputs", f"{Path(latest).name}_phase1_draft"),
         "gztar", root_dir=latest,
     )
-    phase1_model_id = env.get("CLARIFAI_APP_ID", "eagle3") + "_phase1"
+    phase1_model_id = model_id + "_phase1"
     print(f"\n>>> uploading phase-1 checkpoint artifact: {phase1_model_id}_checkpoint", flush=True)
     upload_checkpoint_to_artifact(archive, user_id, app_id, phase1_model_id)
 
@@ -327,7 +327,7 @@ def main():
         cleanup_checkpoints(os.path.join(WORKSPACE, "outputs/phase1"))
 
         # Upload phase-1 checkpoint as artifact for future finetune-only runs
-        upload_phase1_artifact(env)
+        upload_phase1_artifact(env, args.model_id)
 
         if int(args.sg_target) > 0:
             subprocess.run(["bash", "scripts/03_regenerate_data.sh", "sharegpt",     args.sg_target], cwd=WORKSPACE, env=env, check=True)
