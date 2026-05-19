@@ -46,9 +46,12 @@ jobs:
               uv venv "$venv_dir"
             fi
 
-            compile_args=(--python "$venv_dir")
+            # shellcheck disable=SC1091
+            source "$venv_dir/bin/activate"
+
+            compile_args=()
             if [ "$needs_setuptools" = "true" ]; then
-              uv pip install --python "$venv_dir" setuptools
+              uv pip install setuptools
               compile_args+=(--no-build-isolation)
             fi
 
@@ -60,6 +63,7 @@ jobs:
               failed_files+=("$req_file")
             fi
             rm -f "$tmp_out"
+            deactivate
             rm -rf "$venv_dir"
             echo "::endgroup::"
           done < <(find . -name requirements.txt -type f | sort)
