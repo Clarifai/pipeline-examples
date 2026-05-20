@@ -4,7 +4,7 @@ A Clarifai pipeline example that fine-tunes a D-FINE object detector (HuggingFac
 
 ## What's in this example
 
-A Clarifai pipeline consists of three things; this example illustrates all of them:
+A Clarifai pipeline consists of two things; this example illustrates both of them:
 
 - `config.yaml` — pipeline-level config (Argo orchestration spec + pipeline parameters).
 - `detector-pipeline-dfine-ps/` — the pipeline step:

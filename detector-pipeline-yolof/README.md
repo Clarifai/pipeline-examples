@@ -4,7 +4,7 @@ A Clarifai pipeline example that fine-tunes a YOLOF (You Only Look One-level Fea
 
 ## What's in this example
 
-A Clarifai pipeline consists of three things; this example illustrates all of them:
+A Clarifai pipeline consists of two things; this example illustrates both of them:
 
 - `config.yaml` — pipeline-level config (Argo orchestration spec + pipeline parameters).
 - `detector-pipeline-yolof-ps/` — the pipeline step:
