@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -12,12 +13,12 @@ from clarifai.runners.utils.openai_convertor import build_openai_messages
 from clarifai.utils.logging import logger
 
 try:
-    from .model_export_helper import export_and_upload_lora_model
+    from .model_export_helper import export_and_upload_lora_model, upload_checkpoint_to_artifact
 except ImportError:
     _dir = Path(__file__).parent
     if str(_dir) not in sys.path:
         sys.path.insert(0, str(_dir))
-    from model_export_helper import export_and_upload_lora_model
+    from model_export_helper import export_and_upload_lora_model, upload_checkpoint_to_artifact
 
 logging.basicConfig(level=logging.INFO)
 
@@ -135,6 +136,8 @@ class UnslothLoRAVLLM(OpenAIModelClass):
               logging_steps: int = 10,
               save_steps: int = 100,
               seed: int = 105,
+              skip_export: bool = False,
+              hyperparams_json: str = "{}",
               ) -> str:
         # Uncomment to disable torch.compile/dynamo which can fail on certain platforms (e.g. aarch64 GH200).
         # os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
@@ -142,6 +145,23 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         pat = os.getenv("CLARIFAI_PAT")
         if not pat:
             raise ValueError("CLARIFAI_PAT environment variable not set")
+
+        # Apply HP overrides from autoloop (no-op if empty)
+        hp_overrides = json.loads(hyperparams_json) if hyperparams_json else {}
+        if hp_overrides:
+            logging.info(f"[Autoloop] Applying HP overrides: {hp_overrides}")
+            if "learning_rate" in hp_overrides:
+                learning_rate = float(hp_overrides["learning_rate"])
+            if "lora_r" in hp_overrides:
+                lora_r = int(hp_overrides["lora_r"])
+            if "lora_alpha" in hp_overrides:
+                lora_alpha = int(hp_overrides["lora_alpha"])
+            if "num_epochs" in hp_overrides:
+                num_epochs = int(hp_overrides["num_epochs"])
+            if "batch_size" in hp_overrides:
+                batch_size = int(hp_overrides["batch_size"])
+            if "weight_decay" in hp_overrides:
+                weight_decay = float(hp_overrides["weight_decay"])
 
         work_dir = "/tmp/lora_work_dir"
         os.makedirs(work_dir, exist_ok=True)
@@ -237,6 +257,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
             warmup_ratio=warmup_ratio,
             save_steps=save_steps,
             save_strategy="steps",
+            eval_strategy="epoch",
             fp16=not torch.cuda.is_bf16_supported(),
             bf16=torch.cuda.is_bf16_supported(),
             optim="adamw_8bit",
@@ -258,6 +279,11 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         trainer.train()
         logging.info("Training completed")
 
+        # Save trainer state for eval metric extraction
+        trainer_state_path = os.path.join(work_dir, "trainer_state.json")
+        trainer.state.save_to_json(trainer_state_path)
+        logging.info(f"Trainer state saved to {trainer_state_path}")
+
         # STEP 5: Save LoRA adapters
         # Source: unsloth_finetune.py L349-352
         logging.info("=" * 80)
@@ -272,19 +298,69 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         del trainer, model
         torch.cuda.empty_cache()
 
-        # STEP 6: Export and Upload Model to Clarifai
+        # STEP 6: Upload checkpoint to artifact store
         logging.info("=" * 80)
-        logging.info("STEP 6: Exporting and Uploading Model to Clarifai")
+        logging.info("STEP 6: Uploading checkpoint to artifact store")
         logging.info("=" * 80)
 
-        model_template_dir = Path(__file__).parent.parent
-        export_and_upload_lora_model(
-            adapter_path=adapter_path,
-            source_model_dir=model_template_dir,
-            clarifai_pat=pat,
-            clarifai_api_base=os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com"),
-            user_id=user_id, app_id=app_id, model_id=model_id,
-        )
+        import tarfile
+        import tempfile
+        tarball_path = os.path.join(tempfile.mkdtemp(), "lora_adapter.tar.gz")
+        with tarfile.open(tarball_path, "w:gz") as tar:
+            tar.add(adapter_path, arcname="lora_adapter")
+        upload_checkpoint_to_artifact(tarball_path, user_id, app_id, model_id)
+        os.remove(tarball_path)
+        artifact_id = f"{model_id}_checkpoint"
+
+        # STEP 6.5: Extract eval metrics from trainer state
+        logging.info("=" * 80)
+        logging.info("STEP 6.5: Extracting evaluation metrics")
+        logging.info("=" * 80)
+
+        metrics = {}
+        trainer_state_path = os.path.join(work_dir, "trainer_state.json")
+        if os.path.exists(trainer_state_path):
+            with open(trainer_state_path, 'r') as f:
+                state = json.load(f)
+            log_history = state.get("log_history", [])
+            for entry in reversed(log_history):
+                if "eval_loss" in entry:
+                    metrics["eval_loss"] = entry["eval_loss"]
+                    if "eval_runtime" in entry:
+                        metrics["eval_runtime"] = entry["eval_runtime"]
+                    break
+            for entry in reversed(log_history):
+                if "loss" in entry and "eval_loss" not in entry:
+                    metrics["train_loss"] = entry["loss"]
+                    break
+
+        eval_results = {"metrics": metrics}
+        logging.info(f"Eval results: {eval_results}")
+
+        # Write Argo output parameters
+        with open("/tmp/eval_results", 'w') as f:
+            json.dump(eval_results, f)
+        with open("/tmp/artifact_id", 'w') as f:
+            f.write(artifact_id)
+
+        # STEP 7: Export and Upload Model to Clarifai
+        if not skip_export:
+            logging.info("=" * 80)
+            logging.info("STEP 7: Exporting and Uploading Model to Clarifai")
+            logging.info("=" * 80)
+
+            model_template_dir = Path(__file__).parent.parent
+            export_and_upload_lora_model(
+                adapter_path=adapter_path,
+                source_model_dir=model_template_dir,
+                clarifai_pat=pat,
+                clarifai_api_base=os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com"),
+                user_id=user_id, app_id=app_id, model_id=model_id,
+            )
+        else:
+            logging.info("=" * 80)
+            logging.info("STEP 7: Skipping model export (skip_export=True)")
+            logging.info("=" * 80)
 
         logging.info("=" * 80)
         logging.info("PIPELINE COMPLETED SUCCESSFULLY!")
