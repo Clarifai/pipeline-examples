@@ -1,0 +1,95 @@
+pipeline_step:
+  id: "quantize-evaluate-step"
+  user_id: "<YOUR_USER_ID>"
+  app_id: "<YOUR_APP_ID>"
+
+build_info:
+  python_version: "3.12"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "8000m"
+  cpu_memory: "32Gi"
+  num_accelerators: 1
+  accelerator_memory: "40Gi"
+  accelerator_type: ["NVIDIA-*"]
+
+pipeline_step_input_params:
+  # ---- quantize phase ----
+  - name: src
+    default: "Qwen/Qwen2.5-0.5B-Instruct"
+    description: "HF repo id or local path. For an MoE example, set to ibm-granite/granite-4.0-h-tiny."
+  - name: scheme
+    default: "W4A16"
+    description: "Quantization scheme: W4A16, NVFP4, NVFP4A16, FP8, FP8_DYNAMIC, MXFP4, W8A8_INT8."
+    accepted_values:
+      - "W4A16"
+      - "NVFP4"
+      - "NVFP4A16"
+      - "FP8"
+      - "FP8_DYNAMIC"
+      - "MXFP4"
+      - "W8A8_INT8"
+  - name: pipeline
+    default: "datafree"
+    description: "datafree (weight-only schemes), basic, sequential. Empty = let llm-compressor auto-infer."
+    accepted_values:
+      - "datafree"
+      - "basic"
+      - "sequential"
+      - ""
+  - name: num_gpus
+    default: "1"
+    description: "GPUs auto-picked by lowest memory.used (also used as vLLM tensor-parallel-size in the eval phase)."
+  - name: out
+    default: "/workspace/outputs/quantized_model"
+    description: "Output directory for the quantized checkpoint."
+
+  # ---- evaluate phase ----
+  - name: eval_source
+    default: "true"
+    description: >
+      "true" | "false". When "true" (default), also evaluate the SOURCE BF16 model
+      before quantization so summary_comparison.json reports the delta
+      (quantized − source). Set "false" for ~2x faster runs when the baseline is
+      already known.
+    accepted_values:
+      - "true"
+      - "false"
+  - name: dataset
+    default: "gpqa_diamond"
+    description: "evalscope benchmark id (gpqa_diamond, mmlu, mmlu_pro, aime25, ifeval, …)."
+  - name: eval_batch_size
+    default: "32"
+    description: "Concurrent requests evalscope sends to the local vLLM server."
+  - name: timeout
+    default: "1500"
+    description: >
+      Per-request timeout (seconds). The evalscope default of 300 truncates long
+      thinking traces and forces 5× retries; 1500 covers all observed cases.
+  - name: max_tokens
+    default: "64000"
+    description: >
+      Hard cap on generated tokens per response. Bounds runaway thinking traces —
+      without this an outlier sample can run past max-model-len and return empty.
+      Auto-clamped at runtime to fit the model's max_position_embeddings.
+  - name: port
+    default: "8000"
+    description: "Port the vLLM server listens on (loopback only)."
+  - name: eval_out
+    default: "/workspace/outputs/eval_report"
+    description: "Work dir where evalscope writes configs/, logs/, predictions/, reviews/, reports/."
+
+  # ---- artifact uploads (shared) ----
+  - name: user_id
+    default: ""
+    description: "Clarifai user id for artifact uploads. Empty = skip uploads."
+  - name: app_id
+    default: ""
+    description: "Clarifai app id for artifact uploads. Empty = skip uploads."
+  - name: artifact_id
+    default: "quantized-checkpoint"
+    description: "Clarifai artifact id for the quantized checkpoint zip (created if missing)."
+  - name: report_artifact_id
+    default: "eval-report"
+    description: "Clarifai artifact id for the eval report zip (created if missing)."

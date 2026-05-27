@@ -1,0 +1,9 @@
+clarifai>=12.3
+accelerate>=1.0.0
+safetensors>=0.5.2
+datasets>=3.0.0
+# Pinned <1.0 to stay compatible with llm-compressor@7a52e9e's transformers
+# range (4.56–4.57.6), which requires huggingface-hub<1.0.
+huggingface_hub[hf_transfer]>=0.30.0,<1.0
+sentencepiece
+protobuf
