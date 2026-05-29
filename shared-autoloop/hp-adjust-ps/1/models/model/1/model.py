@@ -165,3 +165,8 @@ class HPAdjustment:
             logging.info(f"[HP Adjust] Overfit corrections applied for {task_type}")
 
         return output_path
+
+
+# Explicit entrypoint for pipeline_step.py — avoids fragile reflection-based
+# class discovery.
+MODEL_CLASS = HPAdjustment

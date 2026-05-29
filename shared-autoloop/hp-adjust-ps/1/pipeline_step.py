@@ -2,13 +2,17 @@
 import sys
 from pathlib import Path
 
+# Make the `model/` sibling directory importable. The path includes the literal
+# "1" (Clarifai runner versioning convention) — `__import__` accepts dotted
+# strings starting with digits, but normal `import model.1.model` would not.
 sys.path.insert(0, str(Path(__file__).parent / "models"))
 model_module = __import__("model.1.model", fromlist=[''])
-model_class = [obj for name in dir(model_module) if isinstance(obj := getattr(model_module, name), type) and hasattr(obj, 'adjust')][0]
+MODEL_CLASS = model_module.MODEL_CLASS
+
 
 def main():
-    args = model_class.to_pipeline_parser().parse_args()
-    model_class().adjust(**vars(args))
+    args = MODEL_CLASS.to_pipeline_parser().parse_args()
+    MODEL_CLASS().adjust(**vars(args))
 
 
 if __name__ == "__main__":

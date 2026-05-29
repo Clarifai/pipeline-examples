@@ -212,3 +212,8 @@ class MetricDecision:
         if train_loss is None or eval_loss is None:
             return False
         return train_loss < eval_loss * 0.5
+
+
+# Explicit entrypoint for pipeline_step.py — avoids fragile reflection-based
+# class discovery.
+MODEL_CLASS = MetricDecision
