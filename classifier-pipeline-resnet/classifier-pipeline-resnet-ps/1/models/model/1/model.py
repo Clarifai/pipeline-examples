@@ -24,7 +24,7 @@ try:
         create_classes_file,
     )
     from .benchmark_model_helper import benchmark_and_update_config
-    from .model_export_helper import export_and_upload_classifier
+    from .model_export_helper import export_and_upload_classifier, upload_checkpoint_to_artifact
 except ImportError:
     import sys
     from pathlib import Path
@@ -37,7 +37,7 @@ except ImportError:
         create_classes_file,
     )
     from benchmark_model_helper import benchmark_and_update_config
-    from model_export_helper import export_and_upload_classifier
+    from model_export_helper import export_and_upload_classifier, upload_checkpoint_to_artifact
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -103,6 +103,8 @@ class MMClassificationResNet50(VisualClassifierClass):
               concepts_mutually_exclusive: bool = False,
               pretrained_weights: str = "ImageNet-1k",
               seed: int = -1,
+              skip_export: bool = False,
+              hyperparams_json: str = "{}",
               ) -> str:
         # Get PAT from environment
         pat = os.getenv("CLARIFAI_PAT")
@@ -111,6 +113,19 @@ class MMClassificationResNet50(VisualClassifierClass):
 
         # Convert concepts string to list
         concepts = json.loads(concepts)
+
+        # Apply HP overrides from autoloop (no-op if empty)
+        hp_overrides = json.loads(hyperparams_json) if hyperparams_json else {}
+        if hp_overrides:
+            logging.info(f"[Autoloop] Applying HP overrides: {hp_overrides}")
+            if "per_item_lrate" in hp_overrides:
+                per_item_lrate = float(hp_overrides["per_item_lrate"])
+            if "weight_decay" in hp_overrides:
+                weight_decay = float(hp_overrides["weight_decay"])
+            if "num_epochs" in hp_overrides:
+                num_epochs = int(hp_overrides["num_epochs"])
+            if "batch_size" in hp_overrides:
+                batch_size = int(hp_overrides["batch_size"])
 
         work_dir = "/tmp/mmpretrain_work_dir"
 
@@ -338,25 +353,80 @@ class MMClassificationResNet50(VisualClassifierClass):
         else:
             logging.warning(f"config.yaml not found at {config_yaml_path}, skipping benchmark")
 
-        # STEP 7: Export and Upload Model to Clarifai
+        # STEP 7: Upload checkpoint to artifact store
         logging.info("")
         logging.info("=" * 80)
-        logging.info("STEP 7: Exporting and Uploading Model to Clarifai")
+        logging.info("STEP 7: Uploading checkpoint to artifact store")
         logging.info("=" * 80)
 
-        clarifai_api_base = os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com")
+        upload_checkpoint_to_artifact(self.weights_path, user_id, app_id, model_id)
+        artifact_id = f"{model_id}_checkpoint"
 
-        export_and_upload_classifier(
-            weights_path=self.weights_path,
-            config_py_path=self.config_py_path,
-            classes=concepts,
-            source_model_dir=model_template_dir,
-            clarifai_pat=pat,
-            clarifai_api_base=clarifai_api_base,
-            user_id=user_id,
-            app_id=app_id,
-            model_id=model_id,
-        )
+        # STEP 7.5: Extract eval metrics from training logs
+        logging.info("")
+        logging.info("=" * 80)
+        logging.info("STEP 7.5: Extracting evaluation metrics")
+        logging.info("=" * 80)
+
+        import glob
+        metrics = {}
+        log_files = sorted(glob.glob(os.path.join(self.work_dir, "*.log.json")))
+        if log_files:
+            with open(log_files[-1], 'r') as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line.strip())
+                        if entry.get("mode") == "val":
+                            metrics = {k: v for k, v in entry.items()
+                                       if k not in ("mode", "epoch", "iter", "lr", "step")}
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+        if not metrics:
+            # Fallback: try to get final train loss
+            if log_files:
+                with open(log_files[-1], 'r') as f:
+                    for line in f:
+                        try:
+                            entry = json.loads(line.strip())
+                            if entry.get("mode") == "train" and "loss" in entry:
+                                metrics = {"train_loss": entry["loss"]}
+                        except (json.JSONDecodeError, ValueError):
+                            continue
+
+        eval_results = {"metrics": metrics}
+        logging.info(f"Eval results: {eval_results}")
+
+        # Write Argo output parameters
+        with open("/tmp/eval_results", 'w') as f:
+            json.dump(eval_results, f)
+        with open("/tmp/artifact_id", 'w') as f:
+            f.write(artifact_id)
+
+        # STEP 8: Export and Upload Model to Clarifai
+        if not skip_export:
+            logging.info("")
+            logging.info("=" * 80)
+            logging.info("STEP 8: Exporting and Uploading Model to Clarifai")
+            logging.info("=" * 80)
+
+            clarifai_api_base = os.getenv("CLARIFAI_API_BASE", "https://api.clarifai.com")
+
+            export_and_upload_classifier(
+                weights_path=self.weights_path,
+                config_py_path=self.config_py_path,
+                classes=concepts,
+                source_model_dir=model_template_dir,
+                clarifai_pat=pat,
+                clarifai_api_base=clarifai_api_base,
+                user_id=user_id,
+                app_id=app_id,
+                model_id=model_id,
+            )
+        else:
+            logging.info("")
+            logging.info("=" * 80)
+            logging.info("STEP 8: Skipping model export (skip_export=True)")
+            logging.info("=" * 80)
 
         logging.info("")
         logging.info("=" * 80)

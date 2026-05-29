@@ -1,0 +1,33 @@
+pipeline_step:
+  id: "classifier-eval-ps"
+  user_id: "clarifai"
+  app_id: "train_pipelines"
+  visibility:
+    gettable: PUBLIC
+
+build_info:
+  python_version: "3.11"
+  platform: "linux/amd64"
+
+pipeline_step_compute_info:
+  cpu_limit: "4000m"
+  cpu_memory: "16Gi"
+  num_accelerators: 1
+  accelerator_memory: "16Gi"
+  accelerator_type: ["NVIDIA-*"]
+
+pipeline_step_input_params:
+  - name: user_id
+  - name: app_id
+  - name: model_id
+  - name: dataset_id
+  - name: dataset_version_id
+    default: ""
+  - name: concepts
+  - name: image_size
+    default: "224"
+  - name: batch_size
+    default: "64"
+
+pipeline_step_output_params:
+  - name: eval_results
