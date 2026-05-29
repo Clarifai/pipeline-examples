@@ -1,49 +1,68 @@
-# Eagle3 Two-Phase Training Pipeline
+# Eagle3 Two-Phase Speculative Decoding Pipeline (`eagle3-2phase-pipeline`)
 
-Pipeline template for Eagle3 speculative decoding draft head training using SpecForge.
-Supports two modes:
+A Clarifai pipeline that trains an Eagle3 speculative decoding draft head for Qwen3-8B. Supports full two-phase training (pretrain + finetune) or finetune-only from a pretrained checkpoint. Uploads the trained model to Clarifai for deployment with SGLang.
 
-- **Full 2-phase** (default): pretrain + regen + finetune end-to-end
-- **Finetune-only**: skip pretraining, start from a pretrained checkpoint artifact
+## What's in this example
 
-Both modes upload the trained model to Clarifai for deployment.
+A Clarifai pipeline consists of two things; this example illustrates both of them:
 
-## Structure
+- `config.yaml` — pipeline-level config (Argo orchestration spec + pipeline parameters).
+- `eagle3-train-ps/` — the pipeline step:
+  - `config.yaml` — compute requirements + per-step input parameters.
+  - `Dockerfile` + `requirements.txt` — container/runtime environment.
+  - `1/pipeline_step.py` — orchestrator that runs all training steps sequentially.
+  - `1/scripts/` — training bash scripts (data prep, pretrain, regen, combine, finetune).
+  - `1/model_upload_helper.py` — Clarifai model + artifact upload.
+  - `1/qwen-with-eagle3-model/` — model runner template (uploaded to Clarifai for serving).
+  - `1/configs/` — draft model configs.
 
-```
-eagle3-2phase-pipeline/
-├── config.yaml                          # Pipeline orchestration (Argo spec)
-├── .gitignore
-└── eagle3-train-ps/                     # Pipeline step
-    ├── config.yaml                      # Step compute config + input params
-    ├── Dockerfile                       # sglang:v0.5.9 + SpecForge
-    ├── requirements.txt
-    └── 1/
-        ├── pipeline_step.py             # Orchestrator: runs all steps sequentially
-        ├── model_upload_helper.py       # Clarifai model + artifact upload
-        ├── qwen-with-eagle3-model/      # Model runner template (uploaded to Clarifai)
-        ├── scripts/                     # Training bash scripts
-        └── configs/                     # Draft model configs
-```
+## What this pipeline does
 
-## Setup
+- **Prepare data**: downloads ShareGPT, UltraChat, and PerfectBlend datasets, blends and shuffles them into a training set.
+- **Phase-1 pretrain**: trains the Eagle3 draft head from scratch on the blended data using SpecForge's `train_eagle3.py`.
+- **Phase-1 artifact upload**: uploads the pretrained checkpoint as a Clarifai artifact for future finetune-only runs.
+- **Regenerate data**: uses the target model (Qwen3-8B) to regenerate training data per dataset via SGLang.
+- **Combine regen**: merges regenerated outputs into a single training file.
+- **Phase-2 finetune**: finetunes the draft head on regenerated data, starting from the phase-1 checkpoint.
+- **Upload**: uploads the trained model to Clarifai (served via SGLang with Eagle3 speculative decoding) and stores the checkpoint as an artifact.
+
+**Finetune-only mode** (`pretrained_ckpt` set): skips phase-1 entirely — downloads a pretrained checkpoint artifact and starts from regeneration. When set, phase-1 params (`sg_n`, `uc_n`, `pb_n`, `phase1_epochs`) are ignored.
+
+## Parameters
+
+`config.yaml` exposes the parameters users typically override (`pretrained_ckpt`, `sg_n`, `uc_n`, `pb_n`, `sg_target`, `uc_target`, `pb_target`, `batch_size`, `max_length`, `sglang_mem_frac`, `dataloader_num_workers`, `phase1_epochs`, `phase2_epochs`, `learning_rate`, `regen_temperature`, `app_id`, `model_id`). For full descriptions see `eagle3-train-ps/config.yaml`.
+
+## Quick Start Guide
+
+### Step 1: Set Up Your Environment
 
 ```bash
 pip install clarifai
-clarifai login
+clarifai login   # interactive: paste your Personal Access Token when prompted
+```
 
-# Initialize — auto-fills your user_id and app_id
+Alternatively, set the PAT non-interactively:
+
+```bash
+export CLARIFAI_PAT=<your_personal_access_token>
+```
+
+### Step 2: Initialize the Pipeline from Template
+
+```bash
 clarifai pipeline init --template=eagle3-2phase-pipeline
-
 cd eagle3-2phase-pipeline
 ```
 
-## Upload pipeline and run
+### Step 3: Upload and Run the Pipeline
 
 ```bash
 clarifai pipeline upload .
+```
 
-# Quick sanity check (~1 hr)
+Quick sanity check (~1 hr):
+
+```bash
 clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
     --set sg_n="100" --set uc_n="100" --set pb_n="100" \
     --set sg_target="300" --set uc_target="300" --set pb_target="300" \
@@ -51,20 +70,17 @@ clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
     --set phase1_epochs="1" --set phase2_epochs="3" --set learning_rate="5e-5" \
     --set regen_temperature="0" \
     --set model_id="qwen3-8b-eagle3-test"
-
-# Full training with defaults (~1.5 days on a single GPU)
-clarifai pipeline run --config config-lock.yaml --instance <gpu-instance>
-
 ```
 
-To use your own cluster and nodepool, replace `--instance <gpu-instance>` with `--compute_cluster_id <your-cluster-id> --nodepool_id <your-nodepool-id>`.
-
-## Finetune-only mode
-
-If you already have a pretrained Eagle3 checkpoint (e.g. from a previous phase-1 run), you can skip pretraining and go straight to finetuning. 
+Full training with defaults (~1.5 days on a single GPU):
 
 ```bash
-# Quick finetune sanity check (~1 hr)
+clarifai pipeline run --config config-lock.yaml --instance <gpu-instance>
+```
+
+Finetune-only sanity check (~1 hr):
+
+```bash
 clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
     --set pretrained_ckpt="<artifact_id>" \
     --set sg_target="300" --set uc_target="300" --set pb_target="300" \
@@ -72,13 +88,20 @@ clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
     --set phase2_epochs="3" --set learning_rate="5e-5" \
     --set regen_temperature="0" \
     --set model_id="qwen3-8b-eagle3-ft-test"
+```
 
-# Full finetune with defaults
+Full finetune with defaults:
+
+```bash
 clarifai pipeline run --config config-lock.yaml --instance <gpu-instance> \
     --set pretrained_ckpt="<artifact_id>"
 ```
 
-When `pretrained_ckpt` is set, phase-1 params (`sg_n`, `uc_n`, `pb_n`, `phase1_epochs`) are ignored. The pipeline downloads the checkpoint, prepares regen datasets, and runs finetune + upload.
+To use your own cluster and nodepool, replace `--instance <gpu-instance>` with `--compute_cluster_id <your-cluster-id> --nodepool_id <your-nodepool-id>`. Override parameters at run time by repeating `--set key=value`.
+
+### Step 4: Monitor
+
+Go to `https://clarifai.com/<YOUR_USER_ID>/<YOUR_APP_ID>` — the **Pipelines** tab tracks the run, and the **Models** tab is where the trained model lands when training finishes.
 
 ## Run locally
 
@@ -139,51 +162,12 @@ docker rm -f eagle3-test
 
 In cloud, `CLARIFAI_PAT` and `CLARIFAI_USER_ID` are auto-injected by the platform.
 
-## Tunable parameters
+## Datasets, artifacts, and deployment
 
-All parameters have defaults. Override only what you need.
+- Pipelines overview: https://docs.clarifai.com/compute/pipelines/
+- This pipeline downloads public datasets (ShareGPT, UltraChat, PerfectBlend) automatically via SpecForge. To adjust the data blend, override the `sg_n`, `uc_n`, `pb_n` parameters.
+- Manage Clarifai artifacts (the pipeline uploads both the model and a checkpoint artifact for future finetune-only runs): https://docs.clarifai.com/create/artifacts/manage
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `pretrained_ckpt` | *(empty)* | Pretrained checkpoint artifact. If set, skips phase-1. |
-| `sg_n` | 12000 | ShareGPT rows in phase-1 blend (0 disables) |
-| `uc_n` | 10000 | UltraChat rows (0 disables) |
-| `pb_n` | 5000 | PerfectBlend rows (0 disables) |
-| `sg_target` | 15000 | Target ShareGPT rows for phase-2 regen |
-| `uc_target` | 15000 | Target UltraChat rows for phase-2 regen |
-| `pb_target` | 5000 | Target PerfectBlend rows for phase-2 regen |
-| `batch_size` | 2 | Per-device batch size |
-| `max_length` | 2048 | Max sequence length |
-| `sglang_mem_frac` | 0.6 | SGLang memory fraction |
-| `dataloader_num_workers` | 8 | Torch dataloader workers |
-| `phase1_epochs` | 3 | Phase-1 pretrain epochs (ignored in finetune-only) |
-| `phase2_epochs` | 3 | Phase-2 finetune epochs |
-| `learning_rate` | 2e-5 | Phase-2 LR (phase-1 is hardcoded 1e-4) |
-| `regen_temperature` | 0.8 | Regen sampling temp (0 = greedy/deterministic) |
-| `app_id` | pipeline-app | Clarifai app ID for model upload |
-| `model_id` | qwen3-8b-eagle3 | Clarifai model ID for upload |
+## Custom
 
-## Training flow
-
-**Full 2-phase mode** (default):
-
-| Step | Script | Description |
-|------|--------|-------------|
-| 1 | `01_prepare_data.sh` | Prepare training data blend (SG + UC + PB) |
-| 2 | `02_phase1_pretrain.sh` | Phase-1: pretrain Eagle3 draft head |
-| — | Phase-1 artifact upload | Upload pretrained checkpoint for future finetune runs |
-| 3 | `03_regenerate_data.sh` | Regenerate data per dataset |
-| 4 | `04_combine_regen.sh` | Merge regen outputs into single file |
-| 5 | `05_phase2_finetune.sh` | Phase-2: finetune on regenerated data |
-| 6 | Model upload | Upload model version + checkpoint artifact to Clarifai |
-
-**Finetune-only mode** (`--pretrained_ckpt` set):
-
-| Step | Description |
-|------|-------------|
-| Download checkpoint | Fetch pretrained Eagle3 draft head from Clarifai artifact |
-| Download datasets | Prepare regen input datasets |
-| 3 | Regenerate data per dataset |
-| 4 | Merge regen outputs |
-| 5 | Finetune on regenerated data |
-| 6 | Upload model + checkpoint artifact |
+This is an example — grab it, modify the scripts and pipeline step with the Clarifai SDK, and adapt it for your own target model, datasets, and training schedule.
