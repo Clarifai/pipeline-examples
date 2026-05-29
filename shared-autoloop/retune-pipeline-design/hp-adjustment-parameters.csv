@@ -1,0 +1,12 @@
+Parameter,Category,Type,Default,Constraints,Source,Description
+hp_history,Input,string (JSON),[],Valid JSON array,Metric decision step output,Iteration history — used by grid strategy to skip tried combos and by random strategy for iteration-based seeding
+current_hyperparams,Input,string (JSON),{},Valid JSON object,Workflow param or prior hp-adjust output,Base hyperparameters to modify — strategy applies changes on top of these
+task_type,Input,string,detection,"detection,classification,llm_finetune",Workflow param,Task type — determines schedule rules and default search spaces
+tuning_strategy,Strategy,string,schedule,"schedule,grid,random",Workflow param,"HP adjustment strategy: schedule (deterministic decay), grid (exhaustive enumeration), random (seeded sampling)"
+search_space,Strategy,string (JSON),auto,Valid JSON or "auto",Workflow param,"Search space definition — 'auto' resolves to task-specific defaults per strategy. Grid format: {""param"": [v1,v2]}. Random format: {""param"": {""type"": ""log_uniform"", ""low"": 1e-5, ""high"": 1e-2}}"
+lr_decay_factor,Schedule,float,0.5,0.1–1.0,Workflow param,Multiply learning rate by this factor each iteration (schedule strategy only)
+unfreeze_on_retry,Schedule,bool,true,,Workflow param,Reduce frozen_stages by 1 each iteration for vision detection (schedule strategy only)
+is_overfitting,Signal,bool,false,,Metric decision step output,Overfitting flag — when true this step applies regularization corrections on top of strategy output
+seed,Reproducibility,int,42,0+,Workflow param,Random seed — grid/random strategies use (seed + iteration) for deterministic reproducibility
+hyperparams_json,Output,string (JSON),,Valid JSON object,Written to /tmp/hyperparams_json,New hyperparameter set for the next training iteration
+strategy_metadata,Output,string (JSON),,Valid JSON object,Written to /tmp/strategy_metadata,"Debug metadata: strategy used, parameter changes, overfit corrections applied, grid index, etc."
