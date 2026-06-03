@@ -1,10 +1,10 @@
-# Autoloop Self-Contained Architecture
+# Autoloop Architecture
 
 ## Overview
 
-Each autoloop pipeline folder is **fully self-contained** — it has no runtime dependency on the base (non-autoloop) pipeline folders. The training step (`train-ps/`) in every autoloop folder is a **modified copy** of the corresponding base pipeline's training step, with autoloop-specific additions.
+Autoloop pipelines enable **iterative retraining** of models on Clarifai. Each autoloop pipeline references the base training pipeline directly via Argo `templateRef` — there are **no copied training steps**. The base pipelines already include autoloop support parameters (`skip_export`, `hyperparams_json`).
 
-Shared decision steps (`hp-adjust-ps`, `metric-decision-ps`) live in `shared-autoloop/` and are symlinked into each autoloop folder.
+Shared decision steps (`hp-adjust-ps`, `metric-decision-ps`, `llm-decision-ps`) and evaluation steps (`classifier-eval-ps`, `lora-eval-ps`) live in `shared-autoloop/` and are symlinked into each autoloop folder.
 
 ## Directory Structure
 
@@ -13,48 +13,44 @@ shared-autoloop/
 ├── hp-adjust-ps/              ← Hyperparameter adjustment step (shared)
 ├── metric-decision-ps/        ← Metric-based decision step (shared)
 ├── llm-decision-ps/           ← LLM-based decision step (shared)
-└── retune-pipeline-design/    ← Design documentation
+├── classifier-eval-ps/        ← Classifier evaluation step (shared)
+├── lora-eval-ps/              ← LoRA evaluation step (shared)
+├── retune-pipeline-design/    ← Design documentation
+└── tests/                     ← Unit & integration tests (160+)
 
 classifier-pipeline-resnet-autoloop/
-├── config.yaml
+├── config.yaml                ← Argo DAG referencing base pipeline via templateRef
 ├── hp-adjust-ps  → ../shared-autoloop/hp-adjust-ps     (symlink)
-├── metric-decision-ps → ../shared-autoloop/metric-decision-ps  (symlink)
-└── train-ps/                  ← Modified copy of classifier-pipeline-resnet-ps
+└── metric-decision-ps → ../shared-autoloop/metric-decision-ps  (symlink)
 
 detector-pipeline-yolof-autoloop/
-├── config.yaml
+├── config.yaml                ← Argo DAG referencing base pipeline via templateRef
 ├── hp-adjust-ps  → ../shared-autoloop/hp-adjust-ps     (symlink)
-├── metric-decision-ps → ../shared-autoloop/metric-decision-ps  (symlink)
-└── train-ps/                  ← Modified copy of detector-pipeline-yolof-ps
+└── metric-decision-ps → ../shared-autoloop/metric-decision-ps  (symlink)
 
 lora-pipeline-unsloth-autoloop/
-├── config.yaml
+├── config.yaml                ← Argo DAG referencing base pipeline via templateRef
 ├── hp-adjust-ps  → ../shared-autoloop/hp-adjust-ps     (symlink)
-├── metric-decision-ps → ../shared-autoloop/metric-decision-ps  (symlink)
-└── train-ps/                  ← Modified copy of model-version-train-ps
+└── metric-decision-ps → ../shared-autoloop/metric-decision-ps  (symlink)
 ```
 
-### Why symlinks for decision steps but copies for train-ps?
+### Key Design Decisions
 
-The decision steps (`hp-adjust-ps`, `metric-decision-ps`, `llm-decision-ps`) are **pipeline-agnostic** — they operate on metrics and hyperparameter definitions without any knowledge of the underlying model type. A single shared implementation works across all pipelines.
-
-The training step (`train-ps`), however, is **pipeline-specific** — each model type (ResNet classifier, YOLOF detector, LoRA LLM) has fundamentally different training code, hyperparameters, and export logic. These cannot be shared and need autoloop-specific modifications layered on top.
+- **No train-ps copies** — Autoloop `config.yaml` uses `templateRef` to invoke the base pipeline's training step directly (e.g., `classifier-pipeline-resnet-ps`). This eliminates code duplication.
+- **Symlinked decision steps** — Decision logic is pipeline-agnostic and shared across all autoloop pipelines.
+- **Base pipelines have autoloop built in** — Each base pipeline's `train()` method already accepts `skip_export` and `hyperparams_json` parameters, making it reusable in iterative loops.
 
 ---
 
-## Why Not Use Base Pipeline Code Directly?
+## How Base Pipelines Support Autoloop
 
-The base pipeline training steps are **single-shot trainers** — they train once, export a model, upload it to Clarifai, and exit. The autoloop training step must participate in an **iterative retraining loop** and therefore needs three categories of modifications.
-
-### Modification 1: New Parameters
-
-Two new parameters are added to the `train()` method signature:
+The base pipeline training steps accept two parameters that enable autoloop integration:
 
 ```python
 def train(self,
           ...existing params...,
-          skip_export: bool = False,       # NEW — controls export behavior
-          hyperparams_json: str = "{}",    # NEW — receives HP overrides
+          skip_export: bool = False,       # Controls export behavior
+          hyperparams_json: str = "{}",    # Receives HP overrides from decision step
           ) -> str:
 ```
 
@@ -63,12 +59,11 @@ def train(self,
 | `skip_export` | `bool` | When `True`, skips full Clarifai model export and instead uploads training artifacts (checkpoints, configs) to the artifact store. Used in intermediate loop iterations. |
 | `hyperparams_json` | `str` | JSON string containing hyperparameter overrides suggested by the decision step (hp-adjust, metric-decision, or llm-decision). |
 
-### Modification 2: Hyperparameter Override Block
+### Hyperparameter Override
 
-A block is inserted early in the `train()` method (after PAT validation, before any training logic) that parses the incoming HP overrides and applies them to local variables:
+Early in the `train()` method, the incoming HP overrides are parsed and applied:
 
 ```python
-# Apply HP overrides from autoloop decision step
 hp_overrides = json.loads(hyperparams_json) if isinstance(hyperparams_json, str) else hyperparams_json
 if hp_overrides:
     logging.info(f"Applying hyperparameter overrides: {hp_overrides}")
@@ -79,7 +74,7 @@ if hp_overrides:
     # ... additional HP keys specific to each pipeline
 ```
 
-The overrideable hyperparameters vary per pipeline because each model type exposes different tuning knobs:
+The overrideable hyperparameters vary per pipeline:
 
 | Pipeline | Overrideable Hyperparameters |
 |----------|------------------------------|
@@ -87,125 +82,83 @@ The overrideable hyperparameters vary per pipeline because each model type expos
 | **YOLOF Detector** | `per_item_lrate`, `frozen_stages`, `num_epochs`, `batch_size` |
 | **LoRA Unsloth** | `learning_rate`, `lora_r`, `lora_alpha`, `num_epochs`, `weight_decay` |
 
-### Modification 3: Conditional Export (`skip_export` Branch)
+### Conditional Export (`skip_export` Branch)
 
-The base pipeline's export step (typically "STEP 7") always calls the full export-and-upload function. The autoloop version wraps this in a conditional:
-
-```python
-if skip_export:
-    # 1. Upload checkpoint/adapter to artifact store
-    from model_export_helper import upload_checkpoint_to_artifact
-    upload_checkpoint_to_artifact(weights_path, user_id, app_id, model_id)
-
-    # 2. Upload config to artifact store (if applicable)
-    artifact_id = f"{model_id}_checkpoint"
-    ArtifactVersion().upload(file_path=config_path, ...)
-
-    # 3. Extract eval metrics from training logs
-    #    (ResNet: MMPretrain JSON logs, LoRA: trainer_state.json, YOLOF: separate eval step)
-    metrics = { ... }
-    eval_results = {"metrics": metrics}
-
-    # 4. Write Argo output parameters to /tmp/
-    outputs = {
-        "checkpoint_path": ...,
-        "config_path": ...,
-        "artifact_id": artifact_id,
-        "eval_results": json.dumps(eval_results),
-    }
-    for name, value in outputs.items():
-        Path(f"/tmp/{name}").write_text(str(value))
-else:
-    # Standard full export — identical to base pipeline
-    export_and_upload_model(...)
-```
-
-**Why `skip_export` exists:** In the autoloop's iterative loop, intermediate training runs should NOT publish a new model version to Clarifai. Instead, they upload raw artifacts (checkpoints, configs) and report eval metrics back to the decision step. Only the final iteration (after the decision step declares success) runs the full export path.
-
----
-
-## LoRA-Specific Additional Changes
-
-The LoRA autoloop `train-ps` has two extra modifications beyond the standard 3-part pattern:
-
-### Evaluation Strategy
-
-The base LoRA training does not run mid-training evaluations. The autoloop version adds evaluation during training so eval metrics are available for the decision step:
-
-```python
-# Base
-training_args = TrainingArguments(
-    save_strategy="steps",
-    fp16=...,
-
-# Autoloop — adds eval during training
-training_args = TrainingArguments(
-    save_strategy="steps",
-    eval_strategy="steps",                                        # NEW
-    eval_steps=max(1, max_steps if max_steps > 0 else logging_steps),  # NEW
-    fp16=...,
-```
-
-### Trainer State Persistence
-
-After training completes, the autoloop version saves the trainer state to a JSON file for metric extraction:
-
-```python
-trainer.train()
-logging.info("Training completed")
-trainer.state.save_to_json(os.path.join(work_dir, "trainer_state.json"))  # NEW
-```
+When `skip_export=True` (intermediate loop iterations), the train step uploads artifacts and eval metrics instead of publishing a model. When `skip_export=False` (final iteration), the standard full export runs.
 
 ---
 
 ## How the Autoloop Pipeline Works
 
+The autoloop `config.yaml` defines an Argo DAG with recursive self-invocation:
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Autoloop Pipeline (DAG)                   │
-│                                                             │
-│   ┌──────────┐     ┌──────────────────┐     ┌───────────┐  │
-│   │ train-ps │────▶│ decision step    │────▶│ train-ps  │  │
-│   │ (iter 1) │     │ (metric-decision │     │ (iter 2)  │  │
-│   │          │     │  or llm-decision │     │           │  │
-│   └──────────┘     │  or hp-adjust)   │     └───────────┘  │
-│                    └──────────────────┘                     │
-│                           │                                 │
-│                    Outputs:                                  │
-│                    - continue/stop decision                  │
-│                    - hyperparams_json (tuned HPs)            │
-│                    - skip_export flag                        │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Autoloop Pipeline (Argo DAG)                      │
+│                                                                     │
+│   ┌──────────┐     ┌──────────┐     ┌──────────────┐               │
+│   │  train   │────▶│   eval   │────▶│  llm-decide  │               │
+│   │(base PS) │     │(eval PS) │     │ (decision PS)│               │
+│   └──────────┘     └──────────┘     └──────┬───────┘               │
+│                                            │                        │
+│                        ┌───────────────────┼───────────────────┐    │
+│                        ▼                   ▼                   ▼    │
+│                    [deploy]           [retrain]             [stop]   │
+│                  (export done)    (recurse w/ new HPs)    (fail)    │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 **Loop flow:**
 
-1. **train-ps (iteration N)** — Trains with current hyperparameters. If `skip_export=True`, uploads artifacts and reports eval metrics instead of publishing a model.
-2. **Decision step** — Receives eval metrics and HP history. Decides whether to continue or stop. If continuing, produces new `hyperparams_json` with tuned values.
-3. **train-ps (iteration N+1)** — Receives the new `hyperparams_json`, applies HP overrides, and trains again. Repeats until the decision step signals convergence or `max_retrain_iterations` is reached.
-4. **Final iteration** — Decision step signals stop; train-ps runs with `skip_export=False` and performs the standard full export to Clarifai.
+1. **Train step** (via `templateRef` to base pipeline) — Trains with current hyperparameters and `skip_export=true`. Uploads checkpoint artifacts and reports eval metrics.
+2. **Eval step** — Evaluates the trained model and produces standardized metrics.
+3. **Decision step** (llm-decision or metric-decision) — Receives eval metrics and HP history. Outputs one of:
+   - `deploy` → Model already exported, report success
+   - `retrain` → Recurse with new `hyperparams_json`
+   - `stop` → Max iterations reached, report failure
+4. **Retrain branch** — Recursively invokes the same DAG with updated `current_hyperparams`, `hp_history`, and incremented `current_iteration`.
+
+### HP Expand Step
+
+Before invoking the train step, an `hp-expand` template merges HP overrides with workflow defaults:
+
+```python
+hp = json.loads(current_hyperparams)
+defaults = {"per_item_lrate": "...", "num_epochs": "...", ...}
+merged = {**defaults, **{k: str(v) for k, v in hp.items() if k in defaults}}
+# Writes each HP to /tmp/<key> as Argo output parameters
+```
+
+This ensures the train step receives individual HP parameters (not a JSON blob) for compatibility with the base pipeline's interface.
 
 ---
 
-## Summary of Changes Per File
+## Config.yaml Structure
 
-| File (relative to autoloop folder) | Changes vs Base |
-|-------------------------------------|-----------------|
-| `train-ps/1/models/model/1/model.py` | +2 params (`skip_export`, `hyperparams_json`), HP override block, conditional export branch |
-| `train-ps/1/models/model/1/model_export_helper.py` | New helper: `upload_checkpoint_to_artifact()` for artifact store uploads |
-| `train-ps/config.yaml` | Updated `templateRef` to point to own `train-ps` |
-| `train-ps/1/models/model/Dockerfile` | Copied from base, no changes needed |
-| `train-ps/1/models/model/requirements.txt` | Copied from base, no changes needed |
-| `config.yaml` (pipeline root) | Autoloop-specific params: `search_space`, `metric_threshold`, `max_retrain_iterations`, `tuning_strategy`, LLM config, loop state params |
+Each autoloop `config.yaml` is an Argo Workflow template with:
+
+1. **Training parameters** — Same as the base pipeline (user_id, dataset_id, num_epochs, etc.)
+2. **Autoloop-specific parameters** — Control the loop behavior:
+   - `metric_threshold` — Target metric to achieve
+   - `max_retrain_iterations` — Maximum loop iterations (default: 3)
+   - `tuning_strategy` — HP adjustment strategy (`schedule`, `bayesian`, etc.)
+   - `search_space` — HP search bounds (`auto` or JSON)
+3. **LLM decision parameters** — For llm-decision step:
+   - `llm_model_url` — Clarifai model URL for the decision LLM
+   - `task_description` — Context for the LLM
+4. **Loop state parameters** — Track iteration state:
+   - `current_iteration`, `current_hyperparams`, `hp_history`
+
+Placeholder values (`<YOUR_USER_ID>`, `<YOUR_APP_ID>`, etc.) must be replaced with actual Clarifai resource IDs when deploying.
 
 ---
 
 ## Testing
 
-All autoloop tests live in `shared-autoloop/` and cover the shared decision steps:
+All autoloop tests live in `shared-autoloop/` subdirectories and cover the shared decision/eval steps:
 
 ```bash
-# Run all 160 tests (requires .venv-llm-test with Python 3.11, clarifai 12.4.1)
+# Run all 160+ tests (requires .venv-llm-test with Python 3.11, clarifai 12.4.1)
 source .venv-llm-test/bin/activate
 RUN_LIVE_LLM_TESTS=1 python -m pytest shared-autoloop/ --tb=short -q
 ```

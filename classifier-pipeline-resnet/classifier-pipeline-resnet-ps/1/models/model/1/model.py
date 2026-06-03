@@ -370,12 +370,14 @@ class MMClassificationResNet50(VisualClassifierClass):
 
         import glob
         metrics = {}
+        log_history = []
         log_files = sorted(glob.glob(os.path.join(self.work_dir, "*.log.json")))
         if log_files:
             with open(log_files[-1], 'r') as f:
                 for line in f:
                     try:
                         entry = json.loads(line.strip())
+                        log_history.append(entry)
                         if entry.get("mode") == "val":
                             metrics = {k: v for k, v in entry.items()
                                        if k not in ("mode", "epoch", "iter", "lr", "step")}
@@ -393,8 +395,9 @@ class MMClassificationResNet50(VisualClassifierClass):
                         except (json.JSONDecodeError, ValueError):
                             continue
 
-        eval_results = {"metrics": metrics}
-        logging.info(f"Eval results: {eval_results}")
+        eval_results = {"metrics": metrics, "log_history": log_history}
+        logging.info(f"Eval results (metrics): {metrics}")
+        logging.info(f"Training log history: {len(log_history)} entries")
 
         # Write Argo output parameters
         with open("/tmp/eval_results", 'w') as f:

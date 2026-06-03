@@ -318,6 +318,7 @@ class UnslothLoRAVLLM(OpenAIModelClass):
         logging.info("=" * 80)
 
         metrics = {}
+        log_history = []
         trainer_state_path = os.path.join(work_dir, "trainer_state.json")
         if os.path.exists(trainer_state_path):
             with open(trainer_state_path, 'r') as f:
@@ -334,8 +335,9 @@ class UnslothLoRAVLLM(OpenAIModelClass):
                     metrics["train_loss"] = entry["loss"]
                     break
 
-        eval_results = {"metrics": metrics}
-        logging.info(f"Eval results: {eval_results}")
+        eval_results = {"metrics": metrics, "log_history": log_history}
+        logging.info(f"Eval results (metrics): {metrics}")
+        logging.info(f"Training log history: {len(log_history)} entries")
 
         # Write Argo output parameters
         with open("/tmp/eval_results", 'w') as f:
