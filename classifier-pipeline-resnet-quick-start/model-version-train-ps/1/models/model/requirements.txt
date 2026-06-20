@@ -5,3 +5,4 @@ setuptools
 mmcv==2.2.0
 mmengine==0.10.7
 mmpretrain==1.2.0
+setuptools
